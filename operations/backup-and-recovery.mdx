@@ -1,0 +1,42 @@
+---
+title: Backup and recovery
+description: AMM and validator backup operations with restore procedures.
+---
+
+## Automated systems
+
+| System | Typical schedule | Retention |
+| --- | --- | --- |
+| Validator backup | Every 12 hours | 14 days |
+| AMM database backup | Every 12 hours | 14 days |
+
+## AMM backup script
+
+```bash
+~/scripts/backup-amm.sh --list
+~/scripts/backup-amm.sh --backup
+~/scripts/backup-amm.sh --cleanup
+~/scripts/backup-amm.sh --restore /path/to/database.sql.gz
+```
+
+## Validator backup script
+
+```bash
+~/canton-swap/scripts/mainnet/validator-ops/auto-backup.sh --backup
+~/canton-swap/scripts/mainnet/validator-ops/auto-backup.sh --cleanup
+```
+
+## Restore from S3
+
+```bash
+aws s3 ls s3://canton-mainnet-snapshots-backup/amm/ --region ap-southeast-2
+aws s3 cp s3://canton-mainnet-snapshots-backup/amm/<backup>/database.sql.gz .
+~/scripts/backup-amm.sh --restore database.sql.gz
+```
+
+## Post-restore step
+
+```bash
+cd ~/canton-swap/splice-node/apps/amm-web-ui
+docker compose -f docker-compose.mainnet.yml restart backend
+```

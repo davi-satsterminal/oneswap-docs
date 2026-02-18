@@ -1,0 +1,40 @@
+---
+title: Architecture
+description: OneSwap component model, pool parties, and execution services.
+---
+
+## Pool architecture
+
+Each pool uses two internal parties:
+
+- `pool-{id}-swap`: swap reserve wallet
+- `pool-{id}-lp`: temporary LP deposit wallet
+
+This model keeps reserves isolated per pool and allows automatic signing on validator-hosted parties.
+
+## Party types
+
+| Type | Key management | Signing | Usage |
+| --- | --- | --- | --- |
+| Internal | Validator-managed | Automatic | Pool parties, backend ops |
+| External | User-managed | Manual signatures | End-user wallets |
+
+For AMM pools, use internal parties.
+
+## Backend services
+
+- `SwapDepositMonitor`: detects swap deposits and triggers execution
+- `LpDepositMonitor`: pairs LP token deposits by sender
+- `CCTransferMonitor`: watches CC events
+- `AMMService`: party creation, ledger commands, topology operations
+- `TokenService`: CIP-56 holdings, TransferOffer flows, acceptance
+
+## Settlement paths
+
+- Swaps: user deposit -> swap party -> output token returned
+- LP adds: paired deposits -> LP accounting -> funds moved to swap reserves
+
+## Fee handling
+
+- Swap fee is applied before output quote
+- Platform share and LP share are split after execution

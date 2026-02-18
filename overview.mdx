@@ -1,0 +1,34 @@
+---
+title: Overview
+description: What OneSwap is, how the AMM works, and where to start.
+---
+
+# OneSwap
+
+OneSwap is an automated market maker (AMM) on Canton Network. You use it to swap `CC` and `USDCx`, provide liquidity, and run automated pool operations on validator infrastructure.
+
+## What you can do
+
+- Swap tokens using AMM pricing
+- Add and remove liquidity from pools
+- Track pool balances and LP positions
+- Run backend automations for deposit detection and execution
+
+## Core model
+
+- Formula: `x * y = k`
+- Fee split: `80%` to LPs, `20%` to platform
+- Pool architecture: one swap party and one LP party per pool
+
+## Product flow
+
+1. You create or select a pool.
+2. Users deposit tokens into pool addresses.
+3. OneSwap services detect deposits and execute swap or LP logic.
+4. Outputs are settled on Canton.
+
+## Read next
+
+- `getting-started`
+- `oneswap/architecture`
+- `oneswap/deposit-flow`

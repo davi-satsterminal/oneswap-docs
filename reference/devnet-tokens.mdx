@@ -1,0 +1,26 @@
+---
+title: DevNet tokens
+description: Token availability and test-token workflows on Canton DevNet.
+---
+
+## Availability snapshot
+
+| Token | DevNet availability | Notes |
+| --- | --- | --- |
+| CC (Amulet) | Public faucet | Recommended for testing |
+| USDCx | Limited | No public faucet |
+| CBTC, frxUSD, EURe/GBPe/USDe | Usually MainNet only | Check latest issuer guidance |
+
+## Tap CC through backend
+
+```bash
+curl -X POST http://localhost:3001/api/tap/cc \
+  -H "Content-Type: application/json" \
+  -d '{"party":"<party-id>","amount":"100.0"}'
+
+curl http://localhost:3001/api/tap/balance/<party-id>
+```
+
+## USDCx note
+
+USDCx typically requires issuer support or dedicated test allocations. For AMM pipeline tests, teams often use controlled mock tokens in isolated environments.

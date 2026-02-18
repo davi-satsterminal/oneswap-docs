@@ -1,0 +1,38 @@
+---
+title: DevNet deployment
+description: Deploy and run OneSwap against a DevNet validator.
+---
+
+## Prerequisites
+
+- Running validator stack on EC2
+- Docker and Node.js installed
+- Access to participant JSON API
+
+## Fast path
+
+```bash
+PARTICIPANT_IP=$(docker inspect satsterminal-validator-participant-1 --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+nohup socat TCP-LISTEN:7575,fork,reuseaddr TCP:$PARTICIPANT_IP:7575 &
+
+curl -s http://localhost:7575/v2/state/ledger-end | jq '.offset'
+
+cd ~/canton-swap/splice-node/apps/amm-web-ui/backend
+npm install
+CANTON_API_URL=http://localhost:7575 npm run start
+```
+
+## Validate backend
+
+```bash
+curl http://localhost:3001/health
+curl http://localhost:3001/api/tap/balance/<party-id>
+```
+
+## Tap DevNet CC
+
+```bash
+curl -X POST http://localhost:3001/api/tap/cc \
+  -H "Content-Type: application/json" \
+  -d '{"party":"<party-id>","amount":"100.0"}'
+```

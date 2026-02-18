@@ -1,0 +1,54 @@
+---
+title: Deposit flow
+description: CC and USDCx deposit processing for swaps and liquidity sessions.
+---
+
+## Token handling differences
+
+| Token | Transfer mechanism | Auto-accept | Sender source |
+| --- | --- | --- | --- |
+| CC | TransferPreapproval | Yes | Holding metadata |
+| USDCx | TransferOffer/Accept | No | `accepted_transfer_offers` table |
+
+## Why sender tracking exists
+
+When USDCx is accepted, resulting holdings can lose sender attribution. OneSwap stores sender details before acceptance so LP pairing still works.
+
+```sql
+CREATE TABLE accepted_transfer_offers (
+  id SERIAL PRIMARY KEY,
+  transfer_offer_contract_id VARCHAR(512) NOT NULL UNIQUE,
+  pool_id VARCHAR(64),
+  receiver_party VARCHAR(512) NOT NULL,
+  sender_party VARCHAR(512) NOT NULL,
+  instrument_admin VARCHAR(512) NOT NULL,
+  instrument_id VARCHAR(64) NOT NULL,
+  amount DECIMAL NOT NULL,
+  accepted_at TIMESTAMP DEFAULT NOW(),
+  processed BOOLEAN DEFAULT FALSE
+);
+```
+
+## Session-based pool creation
+
+```http
+POST /api/v2/pools/create-session
+```
+
+```json
+{
+  "creatorParty": "user-party-id::...",
+  "tokenA": { "admin": "...", "name": "CC" },
+  "tokenB": { "admin": "...", "name": "USDCx" },
+  "depositAmountA": "10.0",
+  "depositAmountB": "5.0",
+  "fee": 0.003
+}
+```
+
+## Operational flow
+
+1. Record incoming deposit events.
+2. Resolve sender from metadata or transfer-offer table.
+3. Pair deposits by sender and session.
+4. Execute pool creation or LP add.

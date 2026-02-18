@@ -1,0 +1,44 @@
+---
+title: Deployment
+description: Main deployment model for OneSwap on DevNet and MainNet.
+---
+
+## Infrastructure layout
+
+- Reverse proxy: `nginx`
+- Frontend container: serves OneSwap UI
+- Backend container: serves `/api`
+- Canton validator stack: participant, validator, postgres
+
+## Quick redeploy workflow
+
+```bash
+# 1) SSH into server
+ssh -i "<key>.pem" ec2-user@<host>
+
+# 2) Update code
+cd ~/canton-swap
+git checkout <branch>
+git pull origin <branch>
+
+# 3) Copy updated app files
+cp -r splice-node/apps/amm-web-ui/frontend/* ~/amm-web-ui/frontend/
+cp -r splice-node/apps/amm-web-ui/backend/* ~/amm-web-ui/backend/
+
+# 4) Restart compose
+cd ~/amm-web-ui
+docker compose -f <compose-file>.yml down
+docker compose -f <compose-file>.yml build --no-cache
+docker compose -f <compose-file>.yml up -d
+```
+
+## Network profiles
+
+| Network | Branch | Compose file |
+| --- | --- | --- |
+| DevNet | `devnet` | `docker-compose.validator.yml` |
+| MainNet | `mainnet` | `docker-compose.mainnet.yml` |
+
+## MainNet requirement
+
+Set a strong `JWT_SECRET` before backend startup.

@@ -1,0 +1,55 @@
+---
+title: USDCx transfer acceptance
+description: Accept TransferOffer contracts for USDCx deposits.
+---
+
+USDCx incoming transfers create `TransferOffer` contracts unless direct transfer preapproval applies. You must explicitly accept offers.
+
+## Step 1: fetch accept choice context
+
+```http
+POST https://api.utilities.digitalasset.com/api/token-standard/v0/registrars/{registrar_encoded}/registry/transfer-instruction/v1/{contract_id}/choice-contexts/accept
+```
+
+Body:
+
+```json
+{}
+```
+
+Response includes:
+
+- `choiceContextData`
+- `disclosedContracts`
+
+## Step 2: accept on participant
+
+```http
+POST http://localhost:7575/v2/commands/submit-and-wait
+```
+
+```json
+{
+  "commands": [{
+    "ExerciseCommand": {
+      "templateId": "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction",
+      "contractId": "<transfer-offer-contract-id>",
+      "choice": "TransferInstruction_Accept",
+      "choiceArgument": {
+        "extraArgs": {
+          "context": "<choiceContextData>",
+          "meta": { "values": {} }
+        }
+      }
+    }
+  }],
+  "actAs": ["<receiver-party-id>"],
+  "disclosedContracts": "<disclosedContracts>"
+}
+```
+
+## Important checks
+
+- Pass all context keys returned by Utilities API.
+- Include all disclosed contracts.
+- Persist sender info before acceptance when used for LP attribution.

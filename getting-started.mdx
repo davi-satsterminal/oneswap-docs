@@ -1,0 +1,51 @@
+---
+title: Getting started
+description: Run OneSwap locally and connect to a Canton validator.
+---
+
+## Prerequisites
+
+- Docker and Docker Compose
+- Node.js `18+`
+- Access to a Canton participant JSON API
+- Optional: Daml SDK for rebuilding DARs
+
+## Local development quick start
+
+```bash
+# from the AMM app root
+./scripts/start-dev.sh
+```
+
+This helper script builds DARs, uploads contracts to a local participant, and starts:
+
+- Backend on `http://localhost:3001`
+- Frontend on `http://localhost:5173`
+
+## Manual startup
+
+```bash
+# build contracts
+./scripts/build-dars.sh
+
+# backend
+cd backend
+npm install
+export CANTON_API_URL=http://localhost:6501
+export CANTON_API_TOKEN=<YOUR_TOKEN>
+npm start
+
+# frontend
+cd ../frontend
+npm install
+npm run dev
+```
+
+## DevNet backend quick check
+
+```bash
+curl http://localhost:3001/health
+curl http://localhost:3001/api/tap/balance/<party-id>
+```
+
+If you need a full infrastructure deployment, use `operations/deployment` and `operations/devnet-deploy`.

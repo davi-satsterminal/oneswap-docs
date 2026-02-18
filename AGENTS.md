@@ -1,33 +1,30 @@
-> **First-time setup**: Customize this file for your project. Prompt the user to customize this file for their project.
-> For Mintlify product knowledge (components, configuration, writing standards),
-> install the Mintlify skill: `npx skills add https://mintlify.com/docs`
-
 # Documentation project instructions
 
 ## About this project
 
-- This is a documentation site built on [Mintlify](https://mintlify.com)
-- Pages are MDX files with YAML frontmatter
-- Configuration lives in `docs.json`
-- Run `mint dev` to preview locally
-- Run `mint broken-links` to check links
+- This is a Mintlify documentation site for OneSwap.
+- Pages are MDX files with YAML frontmatter.
+- Configuration lives in `mint.json`.
+- Run `mint dev` to preview locally.
+- Run `mint broken-links` before opening PRs.
 
 ## Terminology
 
-<!-- Add product-specific terms and preferred usage -->
-<!-- Example: Use "workspace" not "project", "member" not "user" -->
+- Use `OneSwap` (not `Oneswap`).
+- Use `Canton Network` for network references.
+- Use `CC (Amulet)` and `USDCx` as token names.
+- Use `party ID` when referring to Canton identities.
 
 ## Style preferences
 
-<!-- Add any project-specific style rules below -->
-
-- Use active voice and second person ("you")
-- Keep sentences concise — one idea per sentence
-- Use sentence case for headings
-- Bold for UI elements: Click **Settings**
-- Code formatting for file names, commands, paths, and code references
+- Use active voice and second person.
+- Keep sentences concise.
+- Use sentence case for headings.
+- Bold UI labels: Click **Swap**.
+- Use code formatting for commands, paths, and API fields.
 
 ## Content boundaries
 
-<!-- Define what should and shouldn't be documented -->
-<!-- Example: Don't document internal admin features -->
+- Focus on OneSwap product behavior, integrations, and operations.
+- Do not document unrelated internal systems from other products.
+- Avoid publishing secrets, private keys, or sensitive infrastructure data.

@@ -1,0 +1,33 @@
+---
+title: DAR deployment
+description: Upload and verify SpliceAMM DAR packages on a validator.
+---
+
+Only the custom `SpliceAMM` package needs manual upload. CIP-56 standard packages are pre-installed.
+
+## Upload flow
+
+```bash
+# copy DAR to server
+scp -i <key>.pem splice-amm-v2-1.3.0.dar ec2-user@<host>:/tmp/
+
+# copy into participant container
+docker cp /tmp/splice-amm-v2-1.3.0.dar splice-validator-participant-1:/tmp/
+
+# upload via ledger API
+docker exec splice-validator-participant-1 curl -X POST \
+  'http://localhost:7575/v2/packages' \
+  -H 'Content-Type: application/octet-stream' \
+  --data-binary @/tmp/splice-amm-v2-1.3.0.dar
+```
+
+## Verify
+
+```bash
+docker exec splice-validator-participant-1 curl -s http://localhost:7575/v2/packages
+```
+
+## After upload
+
+1. Update backend package IDs in `ammService.ts`.
+2. Rebuild and restart backend container.

@@ -1,0 +1,64 @@
+---
+title: USDCx transfer API
+description: Send USDCx using Token Standard TransferFactory and participant commands.
+---
+
+USDCx uses CIP-56 `TransferOffer/Accept` semantics. You generally execute two phases: factory context retrieval and command submission.
+
+## Prerequisites
+
+- Sender and receiver party IDs
+- Sender USDCx holding contract IDs
+- Access to participant JSON API (`/v2/commands/submit-and-wait`)
+- Access to Utilities Token Standard API
+
+## Step 1: request TransferFactory context
+
+```http
+POST https://api.utilities.digitalasset.com/api/token-standard/v0/registrars/{registrar}/registry/transfer-instruction/v1/transfer-factory
+```
+
+Include:
+
+- `transfer.sender`
+- `transfer.receiver`
+- `transfer.amount`
+- `transfer.instrumentId`
+- `transfer.inputHoldingCids`
+- valid `requestedAt` and `executeBefore`
+
+## Step 2: submit transfer command to participant
+
+```http
+POST http://<participant-host>:7575/v2/commands/submit-and-wait
+```
+
+Use:
+
+- `TransferFactory_Transfer` choice
+- `choiceContextData` from step 1
+- `disclosedContracts` from step 1
+
+## Minimal command skeleton
+
+```json
+{
+  "commands": [{
+    "ExerciseCommand": {
+      "templateId": "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
+      "contractId": "<factoryId>",
+      "choice": "TransferFactory_Transfer",
+      "choiceArgument": {
+        "expectedAdmin": "<registrar-party-id>",
+        "transfer": { "sender": "...", "receiver": "...", "amount": "2.0" },
+        "extraArgs": { "context": "<choiceContextData>", "meta": { "values": {} } }
+      }
+    }
+  }],
+  "actAs": ["<sender-party-id>"],
+  "readAs": ["<sender-party-id>", "<receiver-party-id>"],
+  "disclosedContracts": "<disclosedContracts>"
+}
+```
+
+If transfer kind is `offer`, the receiver must accept in a follow-up step.

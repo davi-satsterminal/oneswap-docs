@@ -1,0 +1,38 @@
+---
+title: Validator monitoring
+description: Daily checks for validator health, sync, rewards, and resources.
+---
+
+## Health checks
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep splice
+curl -s -o /dev/null -w "%{http_code}" http://localhost/api/validator/readyz
+```
+
+Expected readiness status is `200`.
+
+## Sync progress
+
+```bash
+docker logs splice-validator-participant-1 --tail 100 2>&1 | \
+  grep -oE 'Offset\([0-9]+\)' | tail -1
+```
+
+## CC balance and rewards signal
+
+```bash
+docker logs splice-validator-validator-1 --tail 10000 2>&1 | \
+  grep "Splice.Amulet:Amulet" | \
+  grep -oE 'Numeric\([0-9]+\.[0-9]+\)' | tail -1
+```
+
+## Resource checks
+
+```bash
+free -h
+df -h /
+top -bn1 | grep "Cpu(s)"
+```
+
+For long-term visibility, run Prometheus + Grafana or a metrics collector cron.

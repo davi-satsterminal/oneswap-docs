@@ -1,0 +1,28 @@
+---
+title: Network and party IDs
+description: Core endpoint and party conventions used by OneSwap.
+---
+
+## MainNet profile (example)
+
+| Setting | Value |
+| --- | --- |
+| Network | `mainnet` |
+| Participant namespace | `122043df1a3b6ae04288cbcd1899434a945a75b849859f20b124e8ba07ebb812a047` |
+| Validator party format | `SatsTerminal-main-1::<namespace>` |
+
+## Common service endpoints
+
+| Service | Typical URL |
+| --- | --- |
+| Participant JSON API | `http://splice-validator-participant-1:7575` |
+| Validator wallet API | `http://splice-validator-app:5003` |
+| OneSwap backend | `http://localhost:3001` |
+| Utilities API | `https://api.utilities.digitalasset.com` |
+
+## Pool party naming
+
+- Swap party: `pool-<short-id>-swap::<namespace>`
+- LP party: `pool-<short-id>-lp::<namespace>`
+
+Use internal party setup for automatic backend signing.

@@ -1,0 +1,82 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&family=DM+Sans:wght@500&family=Schibsted+Grotesk:wght@700&display=swap");
+
+:root {
+  --brand-primary: #34d399;
+  --brand-primary-soft: rgba(52, 211, 153, 0.08);
+}
+
+body {
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Schibsted Grotesk", "DM Sans", system-ui, sans-serif;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+  text-align: center;
+}
+
+p, li, blockquote {
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  font-style: normal;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+}
+
+code, kbd {
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+pre {
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+nav a[aria-current="page"],
+nav a[aria-current="true"],
+.sidebar a.active,
+.sidebar a[data-active="true"],
+.sidebar a[data-state="active"] {
+  background-color: var(--brand-primary-soft) !important;
+  color: var(--brand-primary) !important;
+  border-radius: 8px;
+}
+
+.sidebar a.active svg,
+.sidebar a[data-active="true"] svg,
+.sidebar a[data-state="active"] svg {
+  color: var(--brand-primary) !important;
+}
+
+a,
+.button,
+button {
+  color: var(--brand-primary);
+}
+
+a:hover,
+.button:hover,
+button:hover {
+  color: #1da97a;
+}
+
+ul, ol {
+  padding-left: 1.1rem;
+}

@@ -1,0 +1,38 @@
+---
+title: Swaps and liquidity
+description: How users swap and provide liquidity in OneSwap pools.
+---
+
+## Swap flow
+
+1. You choose input and output token.
+2. OneSwap quotes output, fee, and price impact.
+3. User sends input token to the pool swap address.
+4. Backend executes the swap and returns output to the same wallet.
+
+## Liquidity flow
+
+1. User sends token A and token B to the pool LP address.
+2. Deposits are paired by sender and session.
+3. LP balance is credited.
+4. Tokens move from LP party to swap party reserves.
+
+If a matching pair is not completed in time, the system can refund.
+
+## Supported assets
+
+- `CC` (Canton Coin / Amulet)
+- `USDCx`
+
+## Pricing model
+
+OneSwap uses constant product pricing:
+
+`x * y = k`
+
+Where `x` and `y` are pool reserves.
+
+## Current operational assumptions
+
+- LP accounting may be tracked in backend storage depending on deployment mode.
+- USDCx flows can require TransferOffer acceptance steps.
