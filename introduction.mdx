@@ -1,0 +1,55 @@
+---
+title: Introduction
+description: Add token swaps to your app with a few lines of code.
+---
+
+# OneSwap SDK
+
+OneSwap lets you add token swaps and liquidity to any app on Canton Network.
+
+```typescript
+import { OneSwap } from '@oneswap/sdk'
+
+const client = new OneSwap({ apiKey: 'os_live_...' })
+
+// get a price quote
+const quote = await client.quotes.get({ from: 'Amulet', to: 'USDCx', amount: '100' })
+
+// swap tokens
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  userId: 'your-user-id'
+})
+
+// wait for it to complete
+const result = await swap.wait()
+console.log(`Received ${result.actualOutput} USDCx`)
+```
+
+## What you get
+
+- **Swap tokens** — Amulet (CC), USDCx, and other CIP-56 tokens
+- **Custodial wallets** — create wallets for your users, no Canton setup needed
+- **Real-time quotes** — prices, price impact, slippage protection
+- **Liquidity provision** — add/track LP positions and earnings
+- **Event-driven** — poll or listen for swap completion
+
+## How swaps work
+
+1. You call `client.swaps.create()` — returns a deposit address
+2. Tokens are sent to that address
+3. OneSwap executes the swap automatically
+4. You get the result via `swap.wait()` or events
+
+That's it. No manual signing, no multi-step transactions.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Install, configure, and run your first swap
+  </Card>
+  <Card title="SDK Methods" icon="code" href="/reference/sdk-methods">
+    Every method and parameter
+  </Card>
+</CardGroup>

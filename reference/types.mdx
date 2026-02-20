@@ -1,0 +1,181 @@
+---
+title: Types
+description: TypeScript interfaces exported by the SDK.
+---
+
+## Quote
+
+```typescript
+interface Quote {
+  inputToken: string
+  outputToken: string
+  inputAmount: string
+  outputAmount: string
+  rate: string
+  priceImpact: string
+  fee: number
+  poolId: string
+  expiresIn: number      // seconds
+}
+```
+
+## Wallet
+
+```typescript
+interface Wallet {
+  walletId: string
+  userId: string
+  address: string        // Canton party ID
+  createdAt: string
+}
+
+interface WalletBalance {
+  token: string
+  amount: string
+}
+```
+
+## Pool
+
+```typescript
+interface Pool {
+  id: string
+  tokenA: { name: string; reserve: string }
+  tokenB: { name: string; reserve: string }
+  fee: number
+  lpTokens: string
+}
+
+interface PoolDetail extends Pool {
+  swapAddress: string
+  lpAddress: string
+}
+
+interface PoolStats {
+  apr: number
+  apy: number
+  volume24h: string
+  fees24h: string
+  tvl: string
+  swapCount24h: number
+}
+```
+
+## Swap
+
+```typescript
+interface SwapIntentResponse {
+  intentId: string
+  poolId: string
+  depositAddress: string
+  swapAddress: string
+  inputToken: string
+  outputToken: string
+  expectedAmount: string
+  expectedOutput: string | null
+  minOutput: string | null
+  slippageTolerance: number
+  expiresAt: string
+  instructions: Record<string, string>
+}
+
+interface SwapStatusResponse {
+  intentId: string
+  poolId: string
+  status: 'pending' | 'matched' | 'completed' | 'slippage_failed' | 'expired'
+  inputToken: string
+  outputToken: string
+  expectedAmount: string
+  expectedOutput: string | null
+  actualOutput: string | null
+  minOutput: string | null
+  slippageTolerance: number
+  matchedAt: string | null
+  createdAt: string
+  expiresAt: string
+}
+```
+
+## Liquidity
+
+```typescript
+interface LpIntentResponse {
+  intentId: string
+  poolId: string
+  depositAddress: string
+  lpAddress: string
+  tokenA: string
+  tokenB: string
+  expectedAmountA: string
+  expectedAmountB: string
+  expiresAt: string
+  instructions: Record<string, string>
+}
+
+interface LpStatusResponse {
+  intentId: string
+  poolId: string
+  status: 'pending' | 'partial' | 'completed' | 'expired'
+  tokenA: string
+  tokenB: string
+  expectedAmountA: string
+  expectedAmountB: string
+  createdAt: string
+  expiresAt: string
+}
+```
+
+## Positions
+
+```typescript
+interface LpPosition {
+  poolId: string
+  poolName: string
+  lpTokenId: string
+  lpHoldingCid: string | null
+  amount: string
+  sharePercent: string
+  valueTokenA: string
+  valueTokenB: string
+  tokenA: string
+  tokenB: string
+  fee: number
+}
+
+interface LpEarnings {
+  poolId: string
+  partyId: string
+  apr: number
+  apy: number
+  estimatedDailyEarnings: { tokenA: string; tokenB: string }
+  estimatedMonthlyEarnings: { tokenA: string; tokenB: string }
+  estimatedYearlyEarnings: { tokenA: string; tokenB: string }
+}
+```
+
+## Track
+
+```typescript
+interface TrackResponse {
+  partyId: string
+  swaps: SwapStatusResponse[]
+  liquidity: LpStatusResponse[]
+}
+```
+
+## Errors
+
+```typescript
+class OneSwapError extends Error {
+  statusCode: number
+  response: unknown
+}
+
+class AuthError extends OneSwapError {}        // 401
+class ValidationError extends OneSwapError {}  // 400
+class NotFoundError extends OneSwapError {}    // 404
+class RateLimitError extends OneSwapError {}   // 429
+class SlippageError extends OneSwapError {}    // swap refunded
+class ExpiredError extends OneSwapError {}     // intent timed out
+class ServerError extends OneSwapError {}      // 500
+```

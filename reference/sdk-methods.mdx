@@ -1,0 +1,127 @@
+---
+title: SDK methods
+description: Every method available in the OneSwap SDK.
+---
+
+## Setup
+
+```typescript
+import { OneSwap } from '@oneswap/sdk'
+const client = new OneSwap({ apiKey: 'os_live_...' })
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `apiKey` | `string` | required | Your API key |
+| `timeout` | `number` | `30000` | Request timeout in ms |
+
+---
+
+## Pools
+
+| Method | Description |
+|---|---|
+| `client.pools.list()` | All pools with reserves, fee, LP supply |
+| `client.pools.get(poolId)` | Pool detail with `swapAddress` and `lpAddress` |
+| `client.pools.getStats(poolId)` | `apr`, `apy`, `volume24h`, `fees24h`, `tvl` |
+
+## Tokens
+
+| Method | Description |
+|---|---|
+| `client.tokens.list()` | Available tokens with `name` and `admin` |
+
+## Quotes
+
+| Method | Description |
+|---|---|
+| `client.quotes.get({ from, to, amount })` | Price quote (valid 30s) |
+
+## Wallets
+
+| Method | Description |
+|---|---|
+| `client.wallets.create({ userId })` | Create custodial wallet |
+| `client.wallets.get(userId)` | Get wallet by user ID |
+| `client.wallets.list()` | List all wallets |
+| `client.wallets.getBalances(userId)` | Token balances for a wallet |
+
+## Swaps
+
+| Method | Description |
+|---|---|
+| `client.swaps.create(params)` | Create swap intent → returns `SwapIntent` |
+| `client.swaps.getStatus(intentId)` | Poll swap status |
+| `client.swaps.list(params?)` | List swaps (filter by `status`, `limit`, `offset`) |
+
+### `swaps.create` params
+
+| Param | Required | Description |
+|---|---|---|
+| `fromToken` | yes | Input token (e.g. `'Amulet'`) |
+| `toToken` | yes | Output token (e.g. `'USDCx'`) |
+| `amount` | yes | Input amount |
+| `slippageTolerance` | no | `0.001`–`0.5`, default `0.01` |
+| `userId` | no | Use custodial wallet |
+| `senderParty` | no | Custom Canton party |
+| `outputAddress` | no | Send output to different address |
+
+### SwapIntent object
+
+Extends `EventEmitter`. Properties: `intentId`, `depositAddress`, `expectedOutput`, `minOutput`, `expiresAt`, `instructions`.
+
+| Method / Event | Description |
+|---|---|
+| `swap.wait(opts?)` | Await terminal state |
+| `'matched'` | Deposit detected |
+| `'completed'` | Swap done |
+| `'slippage_failed'` | Refunded |
+| `'expired'` | Timed out |
+
+## Liquidity
+
+| Method | Description |
+|---|---|
+| `client.liquidity.create(params)` | Create LP intent → returns `LpIntent` |
+| `client.liquidity.getStatus(intentId)` | Poll LP status |
+| `client.liquidity.list(params?)` | List LP intents (filter by `status`, `limit`, `offset`) |
+
+### `liquidity.create` params
+
+| Param | Required | Description |
+|---|---|---|
+| `poolId` | yes | Target pool |
+| `amountA` | yes | Token A amount |
+| `amountB` | yes | Token B amount |
+| `userId` | no | Use custodial wallet |
+| `senderParty` | no | Custom Canton party |
+
+### LpIntent object
+
+Extends `EventEmitter`. Properties: `intentId`, `depositAddress`, `lpAddress`, `expiresAt`, `instructions`.
+
+| Method / Event | Description |
+|---|---|
+| `lp.wait(opts?)` | Await terminal state |
+| `'partial'` | One token received |
+| `'completed'` | LP minted |
+| `'expired'` | Timed out |
+
+## Positions
+
+| Method | Description |
+|---|---|
+| `client.positions.list(userId)` | LP positions with share %, value |
+| `client.positions.getEarnings(userId, poolId)` | APR, APY, daily/monthly/yearly estimates |
+
+## History
+
+| Method | Description |
+|---|---|
+| `client.history.list(params?)` | All swaps + LP intents (`limit`, `offset`) |
+
+## Track
+
+| Method | Description |
+|---|---|
+| `client.track(partyId)` | All swaps + LP for a Canton party |

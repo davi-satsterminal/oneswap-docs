@@ -17,21 +17,24 @@
     {
       "group": "Getting Started",
       "pages": [
-        "overview",
-        "getting-started"
+        "introduction",
+        "quickstart"
       ]
     },
     {
-      "group": "SDK",
+      "group": "Guides",
       "pages": [
-        "oneswap/sdk-quickstart",
-        "oneswap/swaps-and-liquidity"
+        "guides/swaps",
+        "guides/liquidity",
+        "guides/wallets",
+        "guides/error-handling"
       ]
     },
     {
       "group": "Reference",
       "pages": [
-        "reference/api-reference"
+        "reference/sdk-methods",
+        "reference/types"
       ]
     }
   ]

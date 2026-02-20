@@ -1,0 +1,74 @@
+---
+title: Error handling
+description: Handle SDK errors gracefully.
+---
+
+## Error classes
+
+Every error thrown by the SDK is an instance of `OneSwapError`:
+
+```typescript
+import {
+  AuthError,        // 401 — invalid or missing API key
+  ValidationError,  // 400 — bad parameters
+  NotFoundError,    // 404 — pool/intent/wallet not found
+  RateLimitError,   // 429 — too many requests
+  SlippageError,    // swap output below minimum
+  ExpiredError,     // intent expired before completion
+  ServerError       // 500 — something went wrong on our end
+} from '@oneswap/sdk'
+```
+
+## Handling swap errors
+
+```typescript
+try {
+  const swap = await client.swaps.create({ ... })
+  const result = await swap.wait()
+} catch (err) {
+  if (err instanceof SlippageError) {
+    // Price moved too much, tokens refunded
+    console.log('Swap refunded due to slippage')
+  } else if (err instanceof ExpiredError) {
+    // User didn't deposit in time
+    console.log('Intent expired — no deposit detected')
+  } else if (err instanceof AuthError) {
+    // Bad API key
+    console.log('Check your API key')
+  } else if (err instanceof ValidationError) {
+    // Bad params (e.g. invalid token name, negative amount)
+    console.log(err.message)
+  }
+}
+```
+
+## Error properties
+
+All errors have:
+
+```typescript
+err.message    // human-readable description
+err.statusCode // HTTP status (0 for SlippageError/ExpiredError)
+err.response   // raw response body from the API
+```
+
+## Common scenarios
+
+| Error | When | What to do |
+|---|---|---|
+| `AuthError` | API key is wrong or missing | Check your key |
+| `ValidationError` | Bad params (missing field, invalid amount) | Fix the request |
+| `NotFoundError` | Pool or intent doesn't exist | Check the ID |
+| `RateLimitError` | Too many requests | Back off and retry |
+| `SlippageError` | Price moved during swap | Retry with higher tolerance or try again |
+| `ExpiredError` | 30 min passed without deposit | Create a new intent |
+| `ServerError` | Our problem | Retry after a moment |
+
+## Configuring wait behavior
+
+```typescript
+const result = await swap.wait({
+  pollInterval: 5000,   // check every 5 seconds (default: 3s)
+  timeout: 600000       // give up after 10 minutes (default: 35min)
+})
+```

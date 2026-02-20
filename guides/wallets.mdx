@@ -1,0 +1,72 @@
+---
+title: Wallets
+description: Create and manage custodial wallets for your users.
+---
+
+## Why custodial wallets
+
+Your users don't need their own Canton party or wallet setup. You create a wallet for them, and it's managed through your API key.
+
+## Create a wallet
+
+```typescript
+const wallet = await client.wallets.create({ userId: 'alice' })
+
+// wallet.walletId  — internal UUID
+// wallet.userId    — "alice"
+// wallet.address   — Canton party ID (use this for deposits/transfers)
+// wallet.createdAt — timestamp
+```
+
+The `userId` is your own identifier — a username, email, database ID, whatever you use.
+
+## Get a wallet
+
+```typescript
+const wallet = await client.wallets.get('alice')
+console.log(wallet.address) // Canton party ID
+```
+
+## List all wallets
+
+```typescript
+const result = await client.wallets.list()
+for (const w of result.wallets) {
+  console.log(`${w.userId}: ${w.address}`)
+}
+```
+
+## Check balances
+
+```typescript
+const balances = await client.wallets.getBalances('alice')
+for (const b of balances.balances) {
+  console.log(`${b.token}: ${b.amount}`)
+}
+```
+
+## Use wallets with swaps
+
+Pass `userId` when creating swaps or LP intents to use the custodial wallet:
+
+```typescript
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  userId: 'alice' // deposit address will be alice's wallet
+})
+```
+
+## Use a custom party instead
+
+If your user has their own Canton party (e.g. from a wallet like Loop), use `senderParty` instead of `userId`:
+
+```typescript
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  senderParty: 'user-party-id::namespace'
+})
+```

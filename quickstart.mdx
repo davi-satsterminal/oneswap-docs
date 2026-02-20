@@ -1,0 +1,86 @@
+---
+title: Quickstart
+description: Get swapping in under 5 minutes.
+---
+
+## 1. Install
+
+```bash
+npm install @oneswap/sdk
+```
+
+## 2. Get your API key
+
+Sign up at [oneswap.cc](https://oneswap.cc) and grab an API key from your dashboard.
+
+## 3. Initialize
+
+```typescript
+import { OneSwap } from '@oneswap/sdk'
+
+const client = new OneSwap({ apiKey: 'os_live_...' })
+```
+
+## 4. Create a wallet for your user
+
+```typescript
+const wallet = await client.wallets.create({ userId: 'alice' })
+// wallet.address → Canton party ID, managed for you
+```
+
+## 5. Get a quote
+
+```typescript
+const quote = await client.quotes.get({
+  from: 'Amulet',
+  to: 'USDCx',
+  amount: '100'
+})
+
+console.log(quote.outputAmount) // "48.392810"
+console.log(quote.rate)         // "0.483928"
+console.log(quote.priceImpact)  // "0.12"
+```
+
+## 6. Execute a swap
+
+```typescript
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  userId: 'alice'
+})
+
+console.log(swap.depositAddress) // where tokens need to go
+console.log(swap.expectedOutput) // what you'll get back
+console.log(swap.expiresAt)      // 30 min to deposit
+```
+
+## 7. Wait for completion
+
+```typescript
+swap.on('matched', () => console.log('Deposit detected'))
+
+const result = await swap.wait()
+console.log(`Done! Got ${result.actualOutput} ${result.outputToken}`)
+```
+
+If slippage is exceeded, the swap is refunded automatically.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Swaps Guide" icon="arrow-right-arrow-left" href="/guides/swaps">
+    Slippage, output addresses, status polling
+  </Card>
+  <Card title="Wallets Guide" icon="wallet" href="/guides/wallets">
+    Creating and managing user wallets
+  </Card>
+  <Card title="Liquidity Guide" icon="droplet" href="/guides/liquidity">
+    Provide liquidity and track earnings
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle failures gracefully
+  </Card>
+</CardGroup>

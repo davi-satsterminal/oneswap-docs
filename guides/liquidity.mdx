@@ -1,0 +1,87 @@
+---
+title: Liquidity
+description: Provide liquidity to pools and track earnings.
+---
+
+## Add liquidity
+
+```typescript
+const lp = await client.liquidity.create({
+  poolId: 'Amulet-USDCx',
+  amountA: '100',
+  amountB: '150',
+  userId: 'alice'
+})
+
+console.log(lp.depositAddress) // send both tokens here
+console.log(lp.expiresAt)      // 30 min to deposit both
+```
+
+Both tokens need to be sent to the same `depositAddress`. Order doesn't matter.
+
+## Track LP status
+
+```typescript
+lp.on('partial', () => console.log('One token received'))
+lp.on('completed', () => console.log('LP tokens minted'))
+
+const result = await lp.wait()
+```
+
+Or poll manually:
+
+```typescript
+const status = await client.liquidity.getStatus(lp.intentId)
+```
+
+## Status lifecycle
+
+```
+pending → partial (one token received)
+        → completed (both received, LP minted)
+        → expired (not completed in 30 min)
+```
+
+## View positions
+
+```typescript
+const positions = await client.positions.list('alice')
+
+for (const pos of positions.positions) {
+  console.log(`${pos.poolName}: ${pos.sharePercent}% share`)
+  console.log(`  ${pos.tokenA}: ${pos.valueTokenA}`)
+  console.log(`  ${pos.tokenB}: ${pos.valueTokenB}`)
+}
+```
+
+## Check earnings
+
+```typescript
+const earnings = await client.positions.getEarnings('alice', 'Amulet-USDCx')
+
+console.log(`APR: ${earnings.apr}%`)
+console.log(`Daily: ${earnings.estimatedDailyEarnings.tokenA} Amulet`)
+console.log(`Daily: ${earnings.estimatedDailyEarnings.tokenB} USDCx`)
+```
+
+## Browse pools
+
+```typescript
+// list all pools
+const pools = await client.pools.list()
+
+// get details for one pool (includes addresses)
+const pool = await client.pools.get('Amulet-USDCx')
+console.log(pool.swapAddress, pool.lpAddress)
+
+// get pool stats
+const stats = await client.pools.getStats('Amulet-USDCx')
+console.log(`TVL: ${stats.tvl}, APR: ${stats.apr}%`)
+```
+
+## List past LP intents
+
+```typescript
+const all = await client.liquidity.list()
+const pending = await client.liquidity.list({ status: 'pending' })
+```

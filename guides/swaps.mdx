@@ -1,0 +1,111 @@
+---
+title: Swaps
+description: Execute token swaps with slippage protection.
+---
+
+## Basic swap
+
+```typescript
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  userId: 'alice'
+})
+```
+
+This returns a `SwapIntent` with everything you need:
+
+| Field | Description |
+|---|---|
+| `depositAddress` | Where tokens need to be sent |
+| `expectedOutput` | Estimated output amount |
+| `minOutput` | Minimum accepted (slippage) |
+| `expiresAt` | Intent expires after 30 minutes |
+| `instructions` | Step-by-step for the user |
+
+## Slippage tolerance
+
+Default is 1%. You can set it between 0.1% and 50%:
+
+```typescript
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  slippageTolerance: 0.005, // 0.5%
+  userId: 'alice'
+})
+```
+
+If the actual output falls below `minOutput`, the swap is refunded and the status becomes `slippage_failed`.
+
+## Send output to a different address
+
+```typescript
+const swap = await client.swaps.create({
+  fromToken: 'Amulet',
+  toToken: 'USDCx',
+  amount: '100',
+  userId: 'alice',
+  outputAddress: 'some-other-party::namespace'
+})
+```
+
+## Track swap status
+
+### Option 1: Await completion
+
+```typescript
+const result = await swap.wait()
+// result.status === 'completed'
+// result.actualOutput === '48.291...'
+```
+
+### Option 2: Listen to events
+
+```typescript
+swap.on('matched', (s) => console.log('Deposit detected'))
+swap.on('completed', (s) => console.log(`Got ${s.actualOutput}`))
+swap.on('slippage_failed', (s) => console.log('Refunded'))
+swap.on('expired', (s) => console.log('Expired'))
+```
+
+### Option 3: Poll manually
+
+```typescript
+const status = await client.swaps.getStatus(swap.intentId)
+```
+
+## Status lifecycle
+
+```
+pending → matched → completed
+                  → slippage_failed (refunded)
+         → expired (no deposit in 30 min)
+```
+
+## List past swaps
+
+```typescript
+const all = await client.swaps.list()
+const pending = await client.swaps.list({ status: 'pending', limit: 10 })
+```
+
+## Get a quote first
+
+Before creating a swap, you can show the user what they'll get:
+
+```typescript
+const quote = await client.quotes.get({
+  from: 'Amulet',
+  to: 'USDCx',
+  amount: '100'
+})
+
+// quote.outputAmount  — how much they'll receive
+// quote.rate          — exchange rate
+// quote.priceImpact   — how much the trade moves the price
+// quote.fee           — pool fee rate
+// quote.expiresIn     — quote valid for 30 seconds
+```
