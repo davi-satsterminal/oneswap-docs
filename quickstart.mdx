@@ -24,7 +24,7 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 ## 4. Create a wallet for your user
 
 ```typescript
-const wallet = await client.wallets.create({ userId: 'alice' })
+const wallet = await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
 // wallet.address → Canton party ID, managed for you
 ```
 
@@ -49,7 +49,7 @@ const swap = await client.swaps.create({
   fromToken: 'Amulet',
   toToken: 'USDCx',
   amount: '100',
-  userId: 'alice'
+  walletAddress: 'alice::12205a8c...'
 })
 
 console.log(swap.depositAddress) // where tokens need to go

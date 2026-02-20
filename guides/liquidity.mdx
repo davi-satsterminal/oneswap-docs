@@ -10,7 +10,7 @@ const lp = await client.liquidity.create({
   poolId: 'Amulet-USDCx',
   amountA: '100',
   amountB: '150',
-  userId: 'alice'
+  walletAddress: 'alice::12205a8c...'
 })
 
 console.log(lp.depositAddress) // send both tokens here
@@ -45,7 +45,7 @@ pending → partial (one token received)
 ## View positions
 
 ```typescript
-const positions = await client.positions.list('alice')
+const positions = await client.positions.list('alice::12205a8c...')
 
 for (const pos of positions.positions) {
   console.log(`${pos.poolName}: ${pos.sharePercent}% share`)
@@ -57,7 +57,7 @@ for (const pos of positions.positions) {
 ## Check earnings
 
 ```typescript
-const earnings = await client.positions.getEarnings('alice', 'Amulet-USDCx')
+const earnings = await client.positions.getEarnings('alice::12205a8c...', 'Amulet-USDCx')
 
 console.log(`APR: ${earnings.apr}%`)
 console.log(`Daily: ${earnings.estimatedDailyEarnings.tokenA} Amulet`)

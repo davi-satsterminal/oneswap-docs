@@ -41,16 +41,16 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 
 | Method | Description |
 |---|---|
-| `client.wallets.create({ userId })` | Create custodial wallet |
-| `client.wallets.get(userId)` | Get wallet by user ID |
+| `client.wallets.create({ walletAddress })` | Create custodial wallet |
+| `client.wallets.get(walletAddress)` | Get wallet by wallet address |
 | `client.wallets.list()` | List all wallets |
-| `client.wallets.getBalances(userId)` | Token balances for a wallet |
+| `client.wallets.getBalances(walletAddress)` | Token balances for a wallet |
 
 ## Swaps
 
 | Method | Description |
 |---|---|
-| `client.swaps.create(params)` | Create swap intent → returns `SwapIntent` |
+| `client.swaps.create(params)` | Create swap intent |
 | `client.swaps.getStatus(intentId)` | Poll swap status |
 | `client.swaps.list(params?)` | List swaps (filter by `status`, `limit`, `offset`) |
 
@@ -62,7 +62,7 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 | `toToken` | yes | Output token (e.g. `'USDCx'`) |
 | `amount` | yes | Input amount |
 | `slippageTolerance` | no | `0.001`–`0.5`, default `0.01` |
-| `userId` | no | Use custodial wallet |
+| `walletAddress` | no | Use custodial wallet |
 | `senderParty` | no | Custom Canton party |
 | `outputAddress` | no | Send output to different address |
 
@@ -82,7 +82,7 @@ Extends `EventEmitter`. Properties: `intentId`, `depositAddress`, `expectedOutpu
 
 | Method | Description |
 |---|---|
-| `client.liquidity.create(params)` | Create LP intent → returns `LpIntent` |
+| `client.liquidity.create(params)` | Create LP intent |
 | `client.liquidity.getStatus(intentId)` | Poll LP status |
 | `client.liquidity.list(params?)` | List LP intents (filter by `status`, `limit`, `offset`) |
 
@@ -93,7 +93,7 @@ Extends `EventEmitter`. Properties: `intentId`, `depositAddress`, `expectedOutpu
 | `poolId` | yes | Target pool |
 | `amountA` | yes | Token A amount |
 | `amountB` | yes | Token B amount |
-| `userId` | no | Use custodial wallet |
+| `walletAddress` | no | Use custodial wallet |
 | `senderParty` | no | Custom Canton party |
 
 ### LpIntent object
@@ -111,8 +111,8 @@ Extends `EventEmitter`. Properties: `intentId`, `depositAddress`, `lpAddress`, `
 
 | Method | Description |
 |---|---|
-| `client.positions.list(userId)` | LP positions with share %, value |
-| `client.positions.getEarnings(userId, poolId)` | APR, APY, daily/monthly/yearly estimates |
+| `client.positions.list(walletAddress)` | LP positions with share %, value |
+| `client.positions.getEarnings(walletAddress, poolId)` | APR, APY, daily/monthly/yearly estimates |
 
 ## History
 

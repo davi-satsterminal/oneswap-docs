@@ -10,20 +10,20 @@ Your users don't need their own Canton party or wallet setup. You create a walle
 ## Create a wallet
 
 ```typescript
-const wallet = await client.wallets.create({ userId: 'alice' })
+const wallet = await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
 
-// wallet.walletId  — internal UUID
-// wallet.userId    — "alice"
-// wallet.address   — Canton party ID (use this for deposits/transfers)
-// wallet.createdAt — timestamp
+// wallet.walletId      — internal UUID
+// wallet.walletAddress — "alice::12205a8c..."
+// wallet.address       — Canton party ID (use this for deposits/transfers)
+// wallet.createdAt     — timestamp
 ```
 
-The `userId` is your own identifier — a username, email, database ID, whatever you use.
+The `walletAddress` is your user's Canton party ID — from PartyLayer wallet connect or any Canton wallet.
 
 ## Get a wallet
 
 ```typescript
-const wallet = await client.wallets.get('alice')
+const wallet = await client.wallets.get('alice::12205a8c...')
 console.log(wallet.address) // Canton party ID
 ```
 
@@ -32,14 +32,14 @@ console.log(wallet.address) // Canton party ID
 ```typescript
 const result = await client.wallets.list()
 for (const w of result.wallets) {
-  console.log(`${w.userId}: ${w.address}`)
+  console.log(`${w.walletAddress}: ${w.address}`)
 }
 ```
 
 ## Check balances
 
 ```typescript
-const balances = await client.wallets.getBalances('alice')
+const balances = await client.wallets.getBalances('alice::12205a8c...')
 for (const b of balances.balances) {
   console.log(`${b.token}: ${b.amount}`)
 }
@@ -47,20 +47,20 @@ for (const b of balances.balances) {
 
 ## Use wallets with swaps
 
-Pass `userId` when creating swaps or LP intents to use the custodial wallet:
+Pass `walletAddress` when creating swaps or LP intents to use the custodial wallet:
 
 ```typescript
 const swap = await client.swaps.create({
   fromToken: 'Amulet',
   toToken: 'USDCx',
   amount: '100',
-  userId: 'alice' // deposit address will be alice's wallet
+  walletAddress: 'alice::12205a8c...' // deposit address will be this wallet
 })
 ```
 
 ## Use a custom party instead
 
-If your user has their own Canton party (e.g. from a wallet like Loop), use `senderParty` instead of `userId`:
+If your user has their own Canton party (e.g. from a wallet like Loop), use `senderParty` instead of `walletAddress`:
 
 ```typescript
 const swap = await client.swaps.create({
