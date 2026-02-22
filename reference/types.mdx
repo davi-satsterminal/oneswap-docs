@@ -33,6 +33,16 @@ interface WalletBalance {
   token: string
   amount: string
 }
+
+interface WalletListResponse {
+  count: number
+  wallets: Wallet[]
+}
+
+interface WalletBalancesResponse {
+  walletAddress: string
+  balances: WalletBalance[]
+}
 ```
 
 ## Pool
@@ -51,11 +61,17 @@ interface PoolDetail extends Pool {
   lpAddress: string
 }
 
+interface PoolListResponse {
+  count: number
+  pools: Pool[]
+}
+
 interface PoolStats {
-  apr: number
-  apy: number
+  apr: string
+  apy: string
   volume24h: string
   fees24h: string
+  lpFees24h: string
   tvl: string
   swapCount24h: number
 }
@@ -94,6 +110,24 @@ interface SwapStatusResponse {
   createdAt: string
   expiresAt: string
 }
+
+// Returned by swaps.list() — a subset of SwapStatusResponse
+interface SwapListItem {
+  intentId: string
+  poolId: string
+  status: SwapStatus
+  inputToken: string
+  outputToken: string
+  expectedAmount: string
+  expectedOutput: string | null
+  createdAt: string
+  expiresAt: string
+}
+
+interface SwapListResponse {
+  count: number
+  swaps: SwapListItem[]
+}
 ```
 
 ## Liquidity
@@ -110,6 +144,11 @@ interface LpIntentResponse {
   expectedAmountB: string
   expiresAt: string
   instructions: Record<string, string>
+}
+
+interface LpListResponse {
+  count: number
+  intents: LpStatusResponse[]
 }
 
 interface LpStatusResponse {
@@ -131,9 +170,7 @@ interface LpStatusResponse {
 interface LpPosition {
   poolId: string
   poolName: string
-  lpTokenId: string
-  lpHoldingCid: string | null
-  amount: string
+  lpTokens: string
   sharePercent: string
   valueTokenA: string
   valueTokenB: string
@@ -142,14 +179,52 @@ interface LpPosition {
   fee: number
 }
 
+interface PositionsResponse {
+  walletAddress: string
+  positions: LpPosition[]
+}
+
 interface LpEarnings {
+  walletAddress: string
   poolId: string
   partyId: string
-  apr: number
-  apy: number
-  estimatedDailyEarnings: { tokenA: string; tokenB: string }
-  estimatedMonthlyEarnings: { tokenA: string; tokenB: string }
-  estimatedYearlyEarnings: { tokenA: string; tokenB: string }
+  lpBalance: string
+  lpSharePercent: string
+  estimatedDailyEarnings: string
+  estimatedMonthlyEarnings: string
+  estimatedYearlyEarnings: string
+  apr: string
+  apy: string
+  totalPoolLpTokens: string
+  tvl: string
+}
+```
+
+## History
+
+```typescript
+interface HistoryResponse {
+  swaps: {
+    count: number
+    items: SwapHistoryItem[]
+  }
+  liquidity: {
+    count: number
+    items: LpStatusResponse[]
+  }
+}
+
+// History items are a subset of SwapStatusResponse
+interface SwapHistoryItem {
+  intentId: string
+  poolId: string
+  status: SwapStatus
+  inputToken: string
+  outputToken: string
+  expectedAmount: string
+  expectedOutput: string | null
+  createdAt: string
+  expiresAt: string
 }
 ```
 
@@ -158,8 +233,22 @@ interface LpEarnings {
 ```typescript
 interface TrackResponse {
   partyId: string
-  swaps: SwapStatusResponse[]
+  swaps: TrackSwapItem[]
   liquidity: LpStatusResponse[]
+}
+
+// Track swap items — a subset of SwapStatusResponse
+interface TrackSwapItem {
+  intentId: string
+  poolId: string
+  status: SwapStatus
+  inputToken: string
+  outputToken: string
+  expectedAmount: string
+  expectedOutput: string | null
+  matchedAt: string | null
+  createdAt: string
+  expiresAt: string
 }
 ```
 

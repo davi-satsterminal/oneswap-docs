@@ -60,8 +60,8 @@ for (const pos of positions.positions) {
 const earnings = await client.positions.getEarnings('alice::12205a8c...', 'Amulet-USDCx')
 
 console.log(`APR: ${earnings.apr}%`)
-console.log(`Daily: ${earnings.estimatedDailyEarnings.tokenA} Amulet`)
-console.log(`Daily: ${earnings.estimatedDailyEarnings.tokenB} USDCx`)
+console.log(`Daily earnings: ${earnings.estimatedDailyEarnings}`)
+console.log(`LP share: ${earnings.lpSharePercent}%`)
 ```
 
 ## Browse pools

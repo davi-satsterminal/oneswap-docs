@@ -26,7 +26,7 @@ This returns a `SwapIntent` with everything you need:
 
 ## Slippage tolerance
 
-Default is 1%. You can set it between 0.1% and 50%:
+Default is 1%. You can set it between 0.1% (0.001) and 50% (0.5):
 
 ```typescript
 const swap = await client.swaps.create({
