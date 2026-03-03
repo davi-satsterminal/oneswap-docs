@@ -73,7 +73,7 @@ Extends `EventEmitter`. Properties: `intentId`, `depositAddress`, `expectedOutpu
 | Method / Event | Description |
 |---|---|
 | `swap.wait(opts?)` | Await terminal state |
-| `'matched'` | Deposit detected |
+| `'processing'` | Deposit detected, swap executing |
 | `'completed'` | Swap done |
 | `'slippage_failed'` | Refunded — price moved beyond tolerance |
 | `'insufficient_amount'` | Refunded — input below network traffic cost |

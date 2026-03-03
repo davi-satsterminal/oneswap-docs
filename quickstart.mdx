@@ -62,7 +62,7 @@ console.log(swap.expiresAt)      // 30 min to deposit
 ## 7. Wait for completion
 
 ```typescript
-swap.on('matched', () => console.log('Deposit detected'))
+swap.on('processing', () => console.log('Deposit detected'))
 
 const result = await swap.wait()
 console.log(`Done! Got ${result.actualOutput} ${result.outputToken}`)

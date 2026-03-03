@@ -65,7 +65,7 @@ const result = await swap.wait()
 ### Option 2: Listen to events
 
 ```typescript
-swap.on('matched', (s) => console.log('Deposit detected'))
+swap.on('processing', (s) => console.log('Deposit detected'))
 swap.on('completed', (s) => console.log(`Got ${s.actualOutput}`))
 swap.on('slippage_failed', (s) => console.log('Refunded — price moved'))
 swap.on('insufficient_amount', (s) => console.log('Refunded — below traffic cost'))
@@ -81,10 +81,11 @@ const status = await client.swaps.getStatus(swap.intentId)
 ## Status lifecycle
 
 ```
-pending → matched → completed
-                  → slippage_failed (refunded — price moved)
-                  → insufficient_amount (refunded — below traffic cost)
-                  → insufficient_liquidity (refunded)
+pending → processing → sending_output → completed
+                    → slippage_failed (refunded — price moved)
+                    → insufficient_amount (refunded — below traffic cost)
+                    → insufficient_liquidity (refunded)
+                    → output_failed (refunded — output transfer failed)
          → expired (no deposit in 30 min)
 ```
 

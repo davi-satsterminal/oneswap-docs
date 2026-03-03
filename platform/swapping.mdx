@@ -67,7 +67,7 @@ For example, with 1% slippage on a swap expecting 100 USDCx output, the swap exe
 Every swap goes through a status lifecycle:
 
 ```
-pending → deposit_received → matched → completed
+pending → processing → sending_output → completed
 ```
 
 **Failure states** (tokens are always refunded):
