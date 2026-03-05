@@ -1,6 +1,6 @@
 ---
 title: Swaps
-description: Execute token swaps with slippage protection.
+description: Execute token swaps with slippage protection and direct-party settlement.
 ---
 
 ## Basic swap
@@ -18,29 +18,37 @@ This returns a `SwapIntent` with everything you need:
 
 | Field | Description |
 |---|---|
-| `depositAddress` | Where tokens need to be sent |
+| `depositAddress` | Pool swap party that should receive the deposit |
 | `expectedOutput` | Estimated output amount |
-| `minOutput` | Minimum accepted (slippage) |
-| `expiresAt` | Intent expires after 30 minutes |
-| `instructions` | Step-by-step for the user |
+| `minOutput` | Minimum accepted after slippage |
+| `expiresAt` | Intent expiration timestamp |
+| `instructions` | Step-by-step transfer instructions |
+
+## Direct-party flow
+
+1. Create the intent with the user's Canton party in `walletAddress`
+2. OneSwap returns the pool swap party as `depositAddress`
+3. The user sends the input token directly from that party to `depositAddress`
+4. OneSwap detects the deposit and executes the swap
+5. Output returns directly to the same party unless `outputAddress` is set
 
 ## Slippage tolerance
 
-Default is 1%. You can set it between 0.1% (0.001) and 50% (0.5):
+Default is 1%. You can set it between 0.1% (`0.001`) and 50% (`0.5`):
 
 ```typescript
 const swap = await client.swaps.create({
   fromToken: 'Amulet',
   toToken: 'USDCx',
   amount: '100',
-  slippageTolerance: 0.005, // 0.5%
+  slippageTolerance: 0.005,
   walletAddress: 'alice::12205a8c...'
 })
 ```
 
-If the actual output falls below `minOutput`, the swap is refunded and the status becomes `slippage_failed`.
+If the actual output falls below `minOutput`, the swap is refunded.
 
-## Send output to a different address
+## Send output to a different party
 
 ```typescript
 const swap = await client.swaps.create({
@@ -52,27 +60,27 @@ const swap = await client.swaps.create({
 })
 ```
 
+If you omit `outputAddress`, output is sent back to the depositor party.
+
 ## Track swap status
 
-### Option 1: Await completion
+### Await completion
 
 ```typescript
 const result = await swap.wait()
-// result.status === 'completed'
-// result.actualOutput === '48.291...'
 ```
 
-### Option 2: Listen to events
+### Listen to events
 
 ```typescript
-swap.on('processing', (s) => console.log('Deposit detected'))
+swap.on('processing', () => console.log('Deposit detected'))
 swap.on('completed', (s) => console.log(`Got ${s.actualOutput}`))
-swap.on('slippage_failed', (s) => console.log('Refunded — price moved'))
-swap.on('insufficient_amount', (s) => console.log('Refunded — below traffic cost'))
-swap.on('expired', (s) => console.log('Expired'))
+swap.on('slippage_failed', () => console.log('Refunded: price moved'))
+swap.on('insufficient_amount', () => console.log('Refunded: below traffic cost'))
+swap.on('expired', () => console.log('Expired'))
 ```
 
-### Option 3: Poll manually
+### Poll manually
 
 ```typescript
 const status = await client.swaps.getStatus(swap.intentId)
@@ -82,23 +90,14 @@ const status = await client.swaps.getStatus(swap.intentId)
 
 ```
 pending → processing → sending_output → completed
-                    → slippage_failed (refunded — price moved)
-                    → insufficient_amount (refunded — below traffic cost)
-                    → insufficient_liquidity (refunded)
-                    → output_failed (refunded — output transfer failed)
-         → expired (no deposit in 30 min)
+                    → slippage_failed
+                    → insufficient_amount
+                    → insufficient_liquidity
+                    → output_failed
+         → expired
 ```
 
-## List past swaps
-
-```typescript
-const all = await client.swaps.list()
-const pending = await client.swaps.list({ status: 'pending', limit: 10 })
-```
-
-## Get a quote first
-
-Before creating a swap, you can show the user what they'll get:
+## Quotes
 
 ```typescript
 const quote = await client.quotes.get({
@@ -106,16 +105,6 @@ const quote = await client.quotes.get({
   to: 'USDCx',
   amount: '100'
 })
-
-// quote.outputAmount             — how much they'll receive
-// quote.rate                     — exchange rate
-// quote.priceImpact              — how much the trade moves the price
-// quote.fee                      — pool fee rate
-// quote.expiresIn                — quote valid for 30 seconds
-// quote.estimatedTrafficCost     — Canton network cost breakdown (optional)
-// quote.inputAmountAfterTrafficFee — net input after traffic fee deduction (optional)
 ```
 
-<Note>
-A **traffic fee** (Canton network cost) is deducted from the input amount before the swap calculation. The quote shows this via `estimatedTrafficCost` and `inputAmountAfterTrafficFee`. If the input amount is too small to cover the traffic cost, the quote endpoint returns a 400 error with a `minimumAmount` field.
-</Note>
+`quote.estimatedTrafficCost` and `quote.inputAmountAfterTrafficFee` help you account for Canton network costs before the swap executes.

@@ -1,72 +1,50 @@
 ---
 title: Fee Earnings
-description: Track and collect your share of swap fees through the SDK.
+description: Track SDK developer fee earnings and direct-payout collections.
 ---
 
 OneSwap shares a portion of platform swap fees with SDK developers. Once your account is enabled for fee sharing, fees accumulate automatically on every swap made through your API keys.
 
-## How It Works
+## How it works
 
 1. A user executes a swap through your integration
-2. The platform collects its standard swap fee
-3. Your configured share of that fee is credited to your developer account
-4. When accumulated fees reach the collection threshold, they are transferred to your fee wallet
+2. The platform takes its standard fee
+3. Your configured share is credited to your developer account in the database
+4. When you collect earnings, payout is sent directly to the destination party you specify in the developer portal or admin tooling
 
-## Check Your Earnings
+## Check your earnings
 
 ```typescript
 const earnings = await client.fees.getEarnings()
 
-console.log(earnings.feeSharePct)   // e.g. 0.25 (25%)
-console.log(earnings.feeWallet)     // your fee wallet address
-console.log(earnings.accumulated)   // { CC: "0.054321", USDCx: "12.50" }
-console.log(earnings.totalCollected) // { CC: "1.234567" }
+console.log(earnings.feeSharePct)
+console.log(earnings.payoutMode)     // 'direct'
+console.log(earnings.accumulated)
+console.log(earnings.totalCollected)
 ```
 
-## View Fee Event History
+`feeWallet` is `null` in direct mode. There is no permanent custodial fee wallet anymore.
 
-Each swap that generates a developer fee creates a fee event:
+## View fee event history
 
 ```typescript
 const history = await client.fees.getEarningsHistory({
   page: 1,
   limit: 20,
-  token: 'CC', // optional filter
+  token: 'CC',
 })
-
-for (const event of history.events) {
-  console.log(`${event.tokenName}: ${event.developerFee} from ${event.inputAmount} input`)
-}
 ```
 
-## View Collection History
-
-When fees are collected (transferred to your wallet), a collection record is created:
+## View collection history
 
 ```typescript
 const collections = await client.fees.getCollections({ page: 1, limit: 20 })
 
 for (const col of collections.collections) {
-  console.log(`${col.amount} ${col.tokenName} collected at ${col.collectedAt}`)
+  console.log(`${col.amount} ${col.tokenName} sent to ${col.destinationParty ?? 'destination'} at ${col.collectedAt}`)
 }
 ```
 
-## Collection Thresholds
+## Developer portal
 
-Fees are collected when the accumulated amount reaches the threshold for that token:
-
-| Token | Threshold |
-|---|---|
-| CC (Amulet) | 5 |
-| USDCx | 50 |
-| Other tokens | 25 |
-
-## Developer Portal
-
-You can also view your earnings in the [developer portal](/developer/earnings) under the **Earnings** tab. The portal shows:
-
-- Your fee share percentage
-- Fee wallet address
-- Accumulated and collected amounts by token
-- Recent fee events
-- Full collection history
+Use the developer portal to review accumulated fees and initiate collections. Each collection asks for a destination Canton party and transfers directly there.

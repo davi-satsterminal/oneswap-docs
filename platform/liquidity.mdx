@@ -1,6 +1,6 @@
 ---
 title: "Providing Liquidity"
-description: "How to provide liquidity on OneSwap — deposit tokens, receive LP tokens, and start earning swap fees."
+description: "How to provide liquidity on OneSwap with direct-party deposits and DB-tracked LP positions."
 ---
 
 # How Liquidity Provision Works
@@ -17,24 +17,24 @@ Liquidity providers (LPs) deposit token pairs into pools and earn a share of eve
     Specify how much of the first token you want to deposit. The required amount of the second token is calculated automatically based on the current pool ratio.
   </Step>
   <Step title="Create an LP Intent">
-    Confirm your deposit. You receive a deposit address where both tokens need to be sent.
+    Confirm your deposit. OneSwap returns the pool LP party as the deposit address.
   </Step>
   <Step title="Send Both Tokens">
-    Transfer both token amounts to the deposit address. You have **30 minutes** to complete both deposits.
+    Transfer both token amounts from the same party to the LP address. You have **30 minutes** to complete both deposits.
   </Step>
-  <Step title="Receive LP Tokens">
-    Once both deposits are detected, OneSwap mints LP tokens proportional to your share of the pool and sends them to the first wallet that deposited.
+  <Step title="Receive LP Position">
+    Once both deposits are detected, OneSwap credits your LP balance in the database based on your proportional share of the pool.
   </Step>
 </Steps>
 
-## How LP Tokens Work
+## How LP positions work
 
-LP tokens represent your ownership share of a liquidity pool.
+Your LP balance represents your ownership share of a liquidity pool.
 
-- **Proportional** — If you deposit 1% of the pool's total value, you receive 1% of the LP tokens
-- **Appreciating** — As swap fees accumulate, each LP token is backed by more underlying reserves
-- **Transferable** — LP tokens are standard Canton tokens
-- **Redeemable** — Withdraw your LP tokens anytime to receive your share of both underlying tokens plus accrued fees
+- **Proportional** — If you deposit 1% of the pool's total value, you receive 1% of the LP supply
+- **Appreciating** — As swap fees accumulate, your LP balance is backed by more underlying reserves
+- **Tracked by OneSwap** — LP ownership is stored in the OneSwap database, not as a separate on-chain token in your wallet
+- **Redeemable** — Withdraw your LP balance anytime to receive your share of both underlying tokens plus accrued fees
 
 ### Example
 
@@ -42,7 +42,7 @@ LP tokens represent your ownership share of a liquidity pool.
 |---|---|---|---|
 | CC | 100 | 10,000 | 1% |
 | USDCx | 50 | 5,000 | 1% |
-| LP Tokens | 100 | 10,000 | 1% |
+| LP Balance | 100 | 10,000 | 1% |
 
 After 1,000 swaps generating fees, your 1% share now represents more CC and USDCx than you originally deposited.
 
@@ -56,9 +56,8 @@ After 1,000 swaps generating fees, your 1% share now represents more CC and USDC
 ## LP Intent Lifecycle
 
 ```
-pending → partial (one token received) → processing (both received) → completed (LP minted)
+pending → partial (one token received) → processing (both received) → completed (LP position credited)
                                         → expired (second token didn't arrive in time)
-        → cancelled (user cancelled)
         → expired (no deposits in 30 min)
 ```
 
@@ -66,9 +65,8 @@ pending → partial (one token received) → processing (both received) → comp
 |--------|---------|
 | `pending` | Waiting for both token deposits |
 | `partial` | One token received, waiting for the second |
-| `processing` | Both tokens received, forwarding to pool |
-| `completed` | Both tokens received, LP tokens minted |
-| `cancelled` | Cancelled by user (only from pending/partial) |
+| `processing` | Both tokens received and the LP position is being credited |
+| `completed` | Both tokens received and the LP position was credited |
 | `expired` | Timeout reached — any deposited tokens are refunded |
 
 ## Withdrawing Liquidity
@@ -76,13 +74,13 @@ pending → partial (one token received) → processing (both received) → comp
 You can withdraw your liquidity at any time:
 
 1. Go to **View Positions** to see your LP holdings
-2. Choose how many LP tokens to withdraw (partial or full)
+2. Choose how much of your LP balance to withdraw (partial or full)
 3. Receive your proportional share of both underlying tokens
 
 Your withdrawal includes all accumulated swap fees — there's no separate "claim" step. When you withdraw, you get your original deposit plus any fees earned.
 
 <Info>
-You can withdraw partially. If you hold 100 LP tokens, you can withdraw 50 and keep earning with the remaining 50.
+You can withdraw partially. If you hold 100 LP balance units, you can withdraw 50 and keep earning with the remaining 50.
 </Info>
 
 ## Risks

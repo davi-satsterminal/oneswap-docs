@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Add token swaps to your app with a few lines of code.
+description: Add direct-party token swaps and liquidity to your app with a few lines of code.
 ---
 
 # OneSwap SDK
@@ -15,7 +15,10 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 // get a price quote
 const quote = await client.quotes.get({ from: 'Amulet', to: 'USDCx', amount: '100' })
 
-// swap tokens
+// register the user's Canton party once
+await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
+
+// create a swap intent
 const swap = await client.swaps.create({
   fromToken: 'Amulet',
   toToken: 'USDCx',
@@ -31,19 +34,20 @@ console.log(`Received ${result.actualOutput} USDCx`)
 ## What you get
 
 - **Swap tokens** — Amulet (CC), USDCx, and other CIP-56 tokens
-- **Custodial wallets** — create wallets for your users, no Canton setup needed
-- **Real-time quotes** — prices, price impact, slippage protection
-- **Liquidity provision** — add/track LP positions and earnings
+- **Direct-party flow** — users deposit from their own Canton party directly to pool parties
+- **Real-time quotes** — prices, price impact, slippage protection, traffic-cost estimates
+- **Liquidity provision** — add LP positions and track earnings
 - **Event-driven** — poll or listen for swap completion
 
 ## How swaps work
 
-1. You call `client.swaps.create()` — returns a deposit address
-2. Tokens are sent to that address
-3. OneSwap executes the swap automatically
-4. You get the result via `swap.wait()` or events
+1. You call `client.swaps.create()` with the user's Canton party ID
+2. OneSwap returns the pool swap party as the `depositAddress`
+3. The user sends tokens directly from that party to the pool party
+4. OneSwap executes the swap automatically
+5. Output returns directly to the same party unless you set `outputAddress`
 
-That's it. No manual signing, no multi-step transactions.
+That's it. No extra wallet layer, no backend forwarding step, no withdraw hop.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="bolt" href="/quickstart">

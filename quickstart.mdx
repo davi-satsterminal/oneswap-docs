@@ -21,12 +21,14 @@ import { OneSwap } from '@oneswap/sdk'
 const client = new OneSwap({ apiKey: 'os_live_...' })
 ```
 
-## 4. Create a wallet for your user
+## 4. Register your user's Canton party
 
 ```typescript
 const wallet = await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
-// wallet.address → Canton party ID, managed for you
+// wallet.address === wallet.walletAddress === the user's Canton party ID
 ```
+
+This does not create a separate backend-managed wallet. It just links that party to your SDK developer account for balances, tracking, and history.
 
 ## 5. Get a quote
 
@@ -37,14 +39,14 @@ const quote = await client.quotes.get({
   amount: '100'
 })
 
-console.log(quote.outputAmount)              // "48.392810"
-console.log(quote.rate)                      // "0.483928"
-console.log(quote.priceImpact)               // "0.12"
-console.log(quote.estimatedTrafficCost?.cc)  // "0.012345" (network fee in CC)
-console.log(quote.inputAmountAfterTrafficFee) // "99.987655" (net input)
+console.log(quote.outputAmount)
+console.log(quote.rate)
+console.log(quote.priceImpact)
+console.log(quote.estimatedTrafficCost?.cc)
+console.log(quote.inputAmountAfterTrafficFee)
 ```
 
-## 6. Execute a swap
+## 6. Create a swap intent
 
 ```typescript
 const swap = await client.swaps.create({
@@ -54,12 +56,16 @@ const swap = await client.swaps.create({
   walletAddress: 'alice::12205a8c...'
 })
 
-console.log(swap.depositAddress) // where tokens need to go
-console.log(swap.expectedOutput) // what you'll get back
-console.log(swap.expiresAt)      // 30 min to deposit
+console.log(swap.depositAddress) // pool swap party
+console.log(swap.expectedOutput)
+console.log(swap.expiresAt)
 ```
 
-## 7. Wait for completion
+## 7. Send the deposit
+
+The user sends tokens from `alice::12205a8c...` directly to `swap.depositAddress`.
+
+## 8. Wait for completion
 
 ```typescript
 swap.on('processing', () => console.log('Deposit detected'))
@@ -68,7 +74,7 @@ const result = await swap.wait()
 console.log(`Done! Got ${result.actualOutput} ${result.outputToken}`)
 ```
 
-If slippage is exceeded, the swap is refunded automatically.
+If slippage is exceeded, the swap is refunded automatically to the depositor party.
 
 ## What's next
 
@@ -77,7 +83,7 @@ If slippage is exceeded, the swap is refunded automatically.
     Slippage, output addresses, status polling
   </Card>
   <Card title="Wallets Guide" icon="wallet" href="/guides/wallets">
-    Creating and managing user wallets
+    Register parties and query balances
   </Card>
   <Card title="Liquidity Guide" icon="droplet" href="/guides/liquidity">
     Provide liquidity and track earnings
