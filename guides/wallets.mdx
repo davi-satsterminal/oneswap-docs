@@ -64,9 +64,3 @@ const swap = await client.swaps.create({
 ```
 
 The `walletAddress` is the actual sender party. The returned `depositAddress` will be the pool swap party, not the user's own party.
-
-## Withdrawals
-
-`client.wallets.withdraw()` is deprecated in direct mode and the backend returns `410`.
-
-Outbound transfers must be done by the wallet that controls the party itself.

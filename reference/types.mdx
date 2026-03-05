@@ -53,21 +53,6 @@ interface WalletBalancesResponse {
   walletAddress: string
   balances: WalletBalance[]
 }
-
-interface WithdrawParams {
-  token: string
-  amount: string
-  destinationAddress: string
-}
-
-interface WithdrawResponse {
-  success: boolean
-  transactionId: string | null
-  walletAddress: string
-  token: string
-  amount: string
-  destinationAddress: string
-}
 ```
 
 ## Pool
