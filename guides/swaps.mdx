@@ -107,4 +107,4 @@ const quote = await client.quotes.get({
 })
 ```
 
-`quote.estimatedTrafficCost` and `quote.inputAmountAfterTrafficFee` help you account for Canton network costs before the swap executes.
+`quote.estimatedTrafficCost`, `quote.trafficFeeInInput`, and `quote.inputAmountAfterTrafficFee` help you account for Canton execution costs before the swap executes.

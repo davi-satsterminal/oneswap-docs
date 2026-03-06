@@ -33,7 +33,7 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 
 | Method | Description |
 |---|---|
-| `client.quotes.get({ from, to, amount })` | Price quote. Includes `estimatedTrafficCost` and `inputAmountAfterTrafficFee`. |
+| `client.quotes.get({ from, to, amount })` | Price quote. Includes `estimatedTrafficCost`, `trafficFeeInInput`, and `inputAmountAfterTrafficFee`. |
 
 ## Wallets
 
@@ -98,20 +98,29 @@ Properties: `intentId`, `depositAddress`, `expectedOutput`, `minOutput`, `expire
 
 Properties: `intentId`, `depositAddress`, `lpAddress`, `expiresAt`, `instructions`.
 
+Notes:
+- `depositAddress` / `lpAddress` is the pool LP party, not the user's own party.
+- The user must send both deposits from the same `walletAddress`.
+- LP intents expire after 30 minutes if the pair is not completed.
+- LP positions are credited in OneSwap's database, not as a user-held on-ledger LP token.
+
 | Method / Event | Description |
 |---|---|
 | `lp.wait(opts?)` | Await terminal state |
 | `'partial'` | One token received |
 | `'processing'` | Both tokens received and LP position is being credited |
 | `'completed'` | LP position credited |
+| `'refunded'` | Deposit was returned because the live pool no longer matched the intent |
+| `'failed'` | LP settlement failed and needs investigation |
 | `'expired'` | Timed out |
+| `'cancelled'` | Intent was cancelled before completion |
 
 ## Positions
 
 | Method | Description |
 |---|---|
 | `client.positions.list(walletAddress)` | LP positions with share percentage and current value |
-| `client.positions.getEarnings(walletAddress, poolId)` | APR, APY, and projected earnings |
+| `client.positions.getEarnings(walletAddress, poolId)` | APR, APY, projected earnings, and current withdrawable amounts |
 
 ## History
 

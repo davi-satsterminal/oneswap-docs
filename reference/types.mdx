@@ -25,6 +25,7 @@ interface Quote {
   poolId: string
   expiresIn: number      // seconds
   estimatedTrafficCost?: TrafficCostEstimate
+  trafficFeeInInput?: string
   inputAmountAfterTrafficFee?: string
 }
 ```
@@ -164,7 +165,7 @@ interface LpListResponse {
 interface LpStatusResponse {
   intentId: string
   poolId: string
-  status: 'pending' | 'partial' | 'completed' | 'expired'
+  status: 'pending' | 'partial' | 'processing' | 'completed' | 'refunded' | 'failed' | 'expired' | 'cancelled'
   tokenA: string
   tokenB: string
   expectedAmountA: string
@@ -334,6 +335,8 @@ class ValidationError extends OneSwapError {}  // 400
 class NotFoundError extends OneSwapError {}    // 404
 class RateLimitError extends OneSwapError {}   // 429
 class SlippageError extends OneSwapError {}    // swap refunded
+class LpRefundedError extends OneSwapError {}  // LP intent refunded
+class LpFailedError extends OneSwapError {}    // LP intent failed
 class ExpiredError extends OneSwapError {}     // intent timed out
 class ServerError extends OneSwapError {}      // 500
 ```

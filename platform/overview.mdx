@@ -45,3 +45,11 @@ See [Fee Sharing & Earning](/platform/earning) for a detailed breakdown of the f
 - **Deposit Monitors** — Detect incoming token transfers and trigger execution
 - **Intent System** — Manages swap and LP intents with automatic expiration
 - **Direct-party settlement** — Deposits and payouts use the user's own party ID directly
+- **DB-tracked LP ownership** — Liquidity positions are tracked by OneSwap and withdrawn through a locked settlement flow
+
+## Security model
+
+- **Swaps are direct-party** — The user sends input directly to the pool and receives output back to the sender party by default.
+- **Liquidity deposits are direct-party** — Both LP deposits come from the same connected party to the pool LP address.
+- **No custodial user wallet layer** — OneSwap does not create a separate execution wallet for end users.
+- **Important boundary** — LP balances are still maintained in the OneSwap database rather than as user-held on-ledger LP tokens.

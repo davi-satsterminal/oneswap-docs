@@ -48,9 +48,9 @@ Every swap incurs a **2% fee** taken from the input amount. This fee is split be
 |-----|--------|---------|
 | LP fee | 1.6% | Liquidity providers |
 | Platform fee | 0.4% | OneSwap (0.2% platform + 0.2% developer for SDK swaps) |
-| Traffic fee | Variable | Canton Network |
+| Traffic fee | Variable | OneSwap treasury recovery for Canton execution costs |
 
-The **traffic fee** is a small network cost that varies based on transaction size. It's deducted from your input before the swap. The quote endpoint shows this as `estimatedTrafficCost` so you know the exact cost upfront.
+The **traffic fee** is a small Canton execution-cost recovery charge that varies based on transaction size. It's deducted from your input before the swap, recorded as a `traffic` fee event, accumulated with platform fees, and later collected from the pool's swap party to treasury. The quote endpoint shows this as `estimatedTrafficCost`, `trafficFeeInInput`, and `inputAmountAfterTrafficFee` so you know the exact net input upfront.
 
 ## Slippage Protection
 

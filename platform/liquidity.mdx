@@ -52,11 +52,30 @@ After 1,000 swaps generating fees, your 1% share now represents more CC and USDC
 - **Ratio must match** — Deposits must match the current pool ratio (the app calculates this for you)
 - **30-minute window** — Both deposits must arrive within 30 minutes
 - **Incomplete deposits are refunded** — If only one token arrives before timeout, it's returned to you
+- **Same sender required** — Both deposits must come from the same Canton party that created the LP intent
+- **One-sided pools are blocked** — Existing pools with a zero reserve on one side reject new liquidity until they are reset
+
+## Security and settlement model
+
+OneSwap's liquidity flow is designed to be non-custodial for token movement, but not fully self-custodial for LP ownership.
+
+- **Direct-party deposits** — Users send token A and token B directly to the pool LP party from their own Canton party.
+- **Exact holding matching** — The LP monitor consumes the exact deposit holdings that matched the LP intent. It does not sweep unrelated LP-party balances.
+- **Refund-first failure handling** — If the second token never arrives, the ratio changes too far, or the deposit does not match the intent, OneSwap refunds the deposit instead of partially crediting liquidity.
+- **Database-tracked LP ownership** — LP balances live in the OneSwap database rather than as a user-held on-ledger LP token.
+- **Locked withdrawals** — Withdrawals reserve the LP balance first, transfer both underlying tokens, and only then burn the LP balance.
+
+<Warning>
+LP balances are not self-custodied on-ledger LP tokens. The non-custodial guarantee here applies to the underlying token transfers, while LP ownership is maintained by OneSwap's database and withdrawal logic.
+</Warning>
 
 ## LP Intent Lifecycle
 
 ```
 pending → partial (one token received) → processing (both received) → completed (LP position credited)
+                                        → refunded (deposit returned)
+                                        → failed (manual investigation needed)
+                                        → cancelled
                                         → expired (second token didn't arrive in time)
         → expired (no deposits in 30 min)
 ```
@@ -67,6 +86,9 @@ pending → partial (one token received) → processing (both received) → comp
 | `partial` | One token received, waiting for the second |
 | `processing` | Both tokens received and the LP position is being credited |
 | `completed` | Both tokens received and the LP position was credited |
+| `refunded` | Deposits were returned because the live pool no longer matched the intent |
+| `failed` | LP settlement failed and needs investigation |
+| `cancelled` | Intent was cancelled before completion |
 | `expired` | Timeout reached — any deposited tokens are refunded |
 
 ## Withdrawing Liquidity
@@ -82,6 +104,12 @@ Your withdrawal includes all accumulated swap fees — there's no separate "clai
 <Info>
 You can withdraw partially. If you hold 100 LP balance units, you can withdraw 50 and keep earning with the remaining 50.
 </Info>
+
+### Withdrawal guarantees
+
+- The withdrawal destination can be your own party or another Canton party you choose.
+- OneSwap does not first send withdrawn tokens to a platform wallet and then forward them.
+- If one transfer leg fails during withdrawal, the withdrawal is left in a recoverable state instead of burning the entire LP claim and pretending it succeeded.
 
 ## Risks
 
