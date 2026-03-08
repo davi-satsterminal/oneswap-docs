@@ -11,14 +11,12 @@ Every error thrown by the SDK is an instance of `OneSwapError`:
 import {
   AuthError,        // 401 — invalid or missing API key
   ValidationError,  // 400 — bad parameters
-  NotFoundError,    // 404 — pool/intent/wallet not found
+  NotFoundError,    // 404 — pool/intent/party not found
   RateLimitError,   // 429 — too many requests
   SlippageError,    // swap output below minimum
   OutputFailedError,// swap output transfer failed
   SwapFailedError,  // generic terminal swap failure
   RefundFailedError,// swap refund failed
-  LpRefundedError,  // LP deposit refunded
-  LpFailedError,    // LP settlement failed
   ExpiredError,     // intent expired before completion
   ServerError       // 500 — something went wrong on our end
 } from '@oneswap/sdk'
@@ -56,23 +54,6 @@ try {
 }
 ```
 
-## Handling LP errors
-
-```typescript
-try {
-  const lp = await client.liquidity.create({ ... })
-  const result = await lp.wait()
-} catch (err) {
-  if (err instanceof LpRefundedError) {
-    console.log('LP deposit refunded — refresh the pool ratio and retry')
-  } else if (err instanceof LpFailedError) {
-    console.log('LP settlement failed — inspect the intent before retrying')
-  } else if (err instanceof ExpiredError) {
-    console.log('LP intent expired before both deposits arrived')
-  }
-}
-```
-
 ## Error properties
 
 All errors have:
@@ -95,8 +76,6 @@ err.response   // raw response body from the API
 | `OutputFailedError` | Output payout failed or the swap party had no output holdings | Inspect the terminal intent status before retrying |
 | `SwapFailedError` | The swap reached a generic terminal failure state | Investigate the intent before retrying |
 | `RefundFailedError` | The refund path failed after a swap error | Manual intervention is required |
-| `LpRefundedError` | LP deposit no longer matched the live pool | Refresh pool data and create a new intent |
-| `LpFailedError` | LP settlement failed after deposit detection | Investigate the intent before retrying |
 | `ValidationError` (400) | Input amount below traffic cost minimum | Increase the swap amount. The error response includes `minimumAmount`. |
 | `ExpiredError` | 30 min passed without deposit | Create a new intent |
 | `ServerError` | Our problem | Retry after a moment |

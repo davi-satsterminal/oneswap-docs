@@ -30,32 +30,6 @@ interface Quote {
 }
 ```
 
-## Wallet
-
-```typescript
-interface Wallet {
-  walletId: string
-  walletAddress: string
-  address: string        // Canton party ID
-  createdAt: string
-}
-
-interface WalletBalance {
-  token: string
-  amount: string
-}
-
-interface WalletListResponse {
-  count: number
-  wallets: Wallet[]
-}
-
-interface WalletBalancesResponse {
-  walletAddress: string
-  balances: WalletBalance[]
-}
-```
-
 ## Pool
 
 ```typescript
@@ -148,79 +122,9 @@ interface SwapListResponse {
   count: number
   swaps: SwapListItem[]
 }
-```
 
-## Liquidity
-
-```typescript
-interface LpIntentResponse {
-  intentId: string
-  poolId: string
-  depositAddress: string
-  lpAddress: string
-  tokenA: string
-  tokenB: string
-  expectedAmountA: string
-  expectedAmountB: string
-  expiresAt: string
-  instructions: Record<string, string>
-}
-
-interface LpListResponse {
-  count: number
-  intents: LpStatusResponse[]
-}
-
-interface LpStatusResponse {
-  intentId: string
-  poolId: string
-  status: 'pending' | 'partial' | 'processing' | 'completed' | 'refunded' | 'failed' | 'expired' | 'cancelled'
-  tokenA: string
-  tokenB: string
-  expectedAmountA: string
-  expectedAmountB: string
-  createdAt: string
-  expiresAt: string
-}
-```
-
-## Positions
-
-```typescript
-interface LpPosition {
-  poolId: string
-  poolName: string
-  lpTokens: string
-  sharePercent: string
-  valueTokenA: string
-  valueTokenB: string
-  tokenA: string
-  tokenB: string
-  fee: number
-}
-
-interface PositionsResponse {
-  walletAddress: string
-  positions: LpPosition[]
-}
-
-interface LpEarnings {
-  walletAddress: string
-  poolId: string
-  partyId: string
-  lpBalance: string
-  lpSharePercent: string
-  estimatedDailyEarnings: string   // projected, not accrued
-  estimatedMonthlyEarnings: string // projected, not accrued
-  estimatedYearlyEarnings: string  // projected, not accrued
-  apr: string
-  apy: string
-  totalPoolLpTokens: string
-  tvl: string
-  withdrawable: {
-    tokenA: { name: string; amount: string }
-    tokenB: { name: string; amount: string }
-  }
+interface CancelSwapResponse {
+  success: boolean
 }
 ```
 
@@ -231,10 +135,6 @@ interface HistoryResponse {
   swaps: {
     count: number
     items: SwapHistoryItem[]
-  }
-  liquidity: {
-    count: number
-    items: LpStatusResponse[]
   }
 }
 
@@ -258,7 +158,6 @@ interface SwapHistoryItem {
 interface TrackResponse {
   partyId: string
   swaps: TrackSwapItem[]
-  liquidity: LpStatusResponse[]
 }
 
 // Track swap items — a subset of SwapStatusResponse
@@ -349,8 +248,6 @@ class InsufficientAmountError extends OneSwapError {}
 class OutputFailedError extends OneSwapError {}
 class SwapFailedError extends OneSwapError {}
 class RefundFailedError extends OneSwapError {}
-class LpRefundedError extends OneSwapError {}  // LP intent refunded
-class LpFailedError extends OneSwapError {}    // LP intent failed
 class ExpiredError extends OneSwapError {}     // intent timed out
 class ServerError extends OneSwapError {}      // 500
 ```

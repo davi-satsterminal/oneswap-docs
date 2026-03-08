@@ -80,18 +80,27 @@ swap.on('expired', () => console.log('Expired'))
 const status = await client.swaps.getStatus(swap.intentId)
 ```
 
+### Cancel a pending swap
+
+```typescript
+await client.swaps.cancel(swap.intentId)
+// or:
+await swap.cancel()
+```
+
 ## Status lifecycle
 
 ```
-pending → processing → sending_output → completed
-                    → slippage_failed
-                    → insufficient_amount
-                    → insufficient_liquidity
-                    → output_failed
-                    → no_output_holdings
-                    → failed
-                    → refund_failed
-         → expired
+pending → matched → deposit_received → forwarded → processing → sending_output → completed
+        → cancelled
+        → slippage_failed
+        → insufficient_amount
+        → insufficient_liquidity
+        → output_failed
+        → no_output_holdings
+        → failed
+        → refund_failed
+        → expired
 ```
 
 Most validation failures refund the input automatically. Rare operational states such as `no_output_holdings`, `failed`, and `refund_failed` mean the swap reached a terminal state that may require manual investigation.

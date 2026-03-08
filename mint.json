@@ -34,8 +34,6 @@
       "group": "Guides",
       "pages": [
         "guides/swaps",
-        "guides/liquidity",
-        "guides/wallets",
         "guides/fee-earnings",
         "guides/error-handling"
       ]

@@ -35,15 +35,6 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 |---|---|
 | `client.quotes.get({ from, to, amount, receiverParty? })` | Price quote. Includes `estimatedTrafficCost`, `trafficFeeInInput`, and `inputAmountAfterTrafficFee`. `outputAmount` is based on the net input after traffic recovery. |
 
-## Wallets
-
-| Method | Description |
-|---|---|
-| `client.wallets.create({ walletAddress })` | Register a direct Canton party for this developer |
-| `client.wallets.get(walletAddress)` | Get a registered party |
-| `client.wallets.list()` | List registered parties |
-| `client.wallets.getBalances(walletAddress)` | Live token balances for a registered party |
-
 ## Swaps
 
 | Method | Description |
@@ -51,6 +42,7 @@ const client = new OneSwap({ apiKey: 'os_live_...' })
 | `client.swaps.create(params)` | Create swap intent |
 | `client.swaps.getStatus(intentId)` | Poll swap status |
 | `client.swaps.list(params?)` | List swaps |
+| `client.swaps.cancel(intentId)` | Cancel a pending swap intent |
 
 ### `swaps.create` params
 
@@ -75,7 +67,11 @@ Notes:
 
 | Method / Event | Description |
 |---|---|
+| `swap.cancel()` | Cancel a pending swap intent |
 | `swap.wait(opts?)` | Await terminal state |
+| `'matched'` | A matching intent/deposit pair has been claimed |
+| `'deposit_received'` | The input deposit has been attributed to the swap |
+| `'forwarded'` | The swap has moved past deposit handling and into settlement |
 | `'processing'` | Deposit detected, swap executing |
 | `'completed'` | Swap done |
 | `'slippage_failed'` | Refunded because price moved |
@@ -86,64 +82,19 @@ Notes:
 | `'failed'` | Swap reached a generic terminal failure state |
 | `'refund_failed'` | Refund path failed and manual intervention is required |
 | `'expired'` | Timed out |
-
-## Liquidity
-
-| Method | Description |
-|---|---|
-| `client.liquidity.create(params)` | Create LP intent |
-| `client.liquidity.getStatus(intentId)` | Poll LP status |
-| `client.liquidity.list(params?)` | List LP intents |
-
-### `liquidity.create` params
-
-| Param | Required | Description |
-|---|---|---|
-| `poolId` | yes | Target pool |
-| `amountA` | yes | Token A amount |
-| `amountB` | yes | Token B amount |
-| `walletAddress` | yes | User's actual Canton party ID |
-
-### LpIntent object
-
-Properties: `intentId`, `depositAddress`, `lpAddress`, `expiresAt`, `instructions`.
-
-Notes:
-- `depositAddress` / `lpAddress` is the pool LP party, not the user's own party.
-- The user must send both deposits from the same `walletAddress`.
-- A different wallet or Canton party will not complete the LP intent.
-- LP intents expire after 30 minutes if the pair is not completed.
-- LP positions are credited in OneSwap's database, not as a user-held on-ledger LP token.
-
-| Method / Event | Description |
-|---|---|
-| `lp.wait(opts?)` | Await terminal state |
-| `'partial'` | One token received |
-| `'processing'` | Both tokens received and LP position is being credited |
-| `'completed'` | LP position credited |
-| `'refunded'` | Deposit was returned because the live pool no longer matched the intent |
-| `'failed'` | LP settlement failed and needs investigation |
-| `'expired'` | Timed out |
-| `'cancelled'` | Intent was cancelled before completion |
-
-## Positions
-
-| Method | Description |
-|---|---|
-| `client.positions.list(walletAddress)` | LP positions with share percentage and current value based on effective reserves |
-| `client.positions.getEarnings(walletAddress, poolId)` | APR, APY, projected earnings, and current withdrawable amounts using the same effective-reserve and fee-event APR calculation shown by the app |
+| `'cancelled'` | Intent was cancelled before execution started |
 
 ## History
 
 | Method | Description |
 |---|---|
-| `client.history.list(params?)` | Swap and LP intent history for your developer account |
+| `client.history.list(params?)` | Swap history for your developer account |
 
 ## Track
 
 | Method | Description |
 |---|---|
-| `client.track(partyId)` | All swaps and LP intents for a registered Canton party |
+| `client.track(partyId)` | Swaps for a Canton party that has already created swap intents through your API key |
 
 ## Fee earnings
 

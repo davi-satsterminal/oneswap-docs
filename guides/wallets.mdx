@@ -1,58 +1,17 @@
 ---
 title: Wallets
-description: Register Canton parties for SDK usage and query their balances.
+description: Wallet-specific SDK methods have been removed.
 ---
 
-## What `client.wallets` does now
+## Wallet methods are no longer part of the SDK
 
-The SDK uses the user's real Canton party directly.
+The public SDK no longer exposes `client.wallets.*`.
 
-`client.wallets` is now a lightweight registry for Canton party IDs tied to your developer account. It lets you:
+- Pass the user's Canton `party ID` directly into `client.swaps.create({ walletAddress })`.
+- Use your own wallet provider or app state to show balances.
+- Use the main OneSwap website for liquidity management.
 
-- register a user party once
-- list the parties you use through the SDK
-- query live balances for those parties
-- scope position and tracking queries to known parties
-
-## Register a party
-
-```typescript
-const wallet = await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
-
-console.log(wallet.walletId)
-console.log(wallet.walletAddress) // user's Canton party ID
-console.log(wallet.address)       // same party ID
-console.log(wallet.createdAt)
-```
-
-## Get a registered party
-
-```typescript
-const wallet = await client.wallets.get('alice::12205a8c...')
-console.log(wallet.address)
-```
-
-## List registered parties
-
-```typescript
-const result = await client.wallets.list()
-for (const w of result.wallets) {
-  console.log(w.walletAddress)
-}
-```
-
-## Check balances
-
-```typescript
-const balances = await client.wallets.getBalances('alice::12205a8c...')
-for (const b of balances.balances) {
-  console.log(`${b.token}: ${b.amount}`)
-}
-```
-
-These are live on-chain balances for that party, aggregated by token.
-
-## Use a registered party with swaps
+## Example swap flow
 
 ```typescript
 const swap = await client.swaps.create({

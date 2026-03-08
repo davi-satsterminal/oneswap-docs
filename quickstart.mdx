@@ -21,23 +21,14 @@ import { OneSwap } from '@oneswap/sdk'
 const client = new OneSwap({ apiKey: 'os_live_...' })
 ```
 
-## 4. Register your user's Canton party
-
-```typescript
-const wallet = await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
-// wallet.address === wallet.walletAddress === the user's Canton party ID
-```
-
-This does not create a separate platform wallet. It just links that party to your SDK developer account for balances, tracking, and history.
-
-## 5. Get a quote
+## 4. Get a quote
 
 ```typescript
 const quote = await client.quotes.get({
   from: 'Amulet',
   to: 'USDCx',
   amount: '100',
-  receiverParty: wallet.walletAddress
+  receiverParty: 'alice::12205a8c...'
 })
 
 console.log(quote.outputAmount)
@@ -50,7 +41,7 @@ console.log(quote.inputAmountAfterTrafficFee)
 
 `quote.outputAmount` is already calculated from `quote.inputAmountAfterTrafficFee`. The traffic recovery is separate from the 2% swap fee.
 
-## 6. Create a swap intent
+## 5. Create a swap intent
 
 ```typescript
 const swap = await client.swaps.create({
@@ -65,11 +56,11 @@ console.log(swap.expectedOutput)
 console.log(swap.expiresAt)
 ```
 
-## 7. Send the deposit
+## 6. Send the deposit
 
 The user sends tokens from `alice::12205a8c...` directly to `swap.depositAddress`. Do not send from a different wallet or Canton party, or the swap will not complete.
 
-## 8. Wait for completion
+## 7. Wait for completion
 
 ```typescript
 swap.on('processing', () => console.log('Deposit detected'))
@@ -86,13 +77,10 @@ If slippage is exceeded, the swap is refunded automatically to the depositor par
   <Card title="Swaps Guide" icon="arrow-right-arrow-left" href="/guides/swaps">
     Slippage, status polling, and failure states
   </Card>
-  <Card title="Wallets Guide" icon="wallet" href="/guides/wallets">
-    Register parties and query balances
-  </Card>
-  <Card title="Liquidity Guide" icon="droplet" href="/guides/liquidity">
-    Provide liquidity and track earnings
-  </Card>
   <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
     Handle failures gracefully
+  </Card>
+  <Card title="SDK Methods" icon="code" href="/reference/sdk-methods">
+    Review the swaps-focused SDK surface
   </Card>
 </CardGroup>

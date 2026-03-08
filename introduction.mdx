@@ -1,26 +1,23 @@
 ---
 title: Introduction
-description: Add direct-party token swaps and liquidity to your app with a few lines of code.
+description: Add direct-party token swaps to your app with a few lines of code.
 ---
 
 # OneSwap SDK
 
-OneSwap lets you add token swaps and liquidity to any app on Canton Network.
+OneSwap lets you add token swaps to any app on Canton Network.
 
 ```typescript
 import { OneSwap } from '@oneswap/sdk'
 
 const client = new OneSwap({ apiKey: 'os_live_...' })
 
-// register the user's Canton party once
-const wallet = await client.wallets.create({ walletAddress: 'alice::12205a8c...' })
-
 // get a price quote
 const quote = await client.quotes.get({
   from: 'Amulet',
   to: 'USDCx',
   amount: '100',
-  receiverParty: wallet.walletAddress
+  receiverParty: 'alice::12205a8c...'
 })
 
 // create a swap intent
@@ -41,7 +38,6 @@ console.log(`Received ${result.actualOutput} USDCx`)
 - **Swap tokens** — Amulet (CC), USDCx, and other CIP-56 tokens
 - **Direct-party flow** — users deposit from their own Canton party directly to pool parties
 - **Real-time quotes** — prices, price impact, slippage protection, traffic-cost estimates
-- **Liquidity provision** — add LP positions and track earnings
 - **Event-driven** — poll or listen for swap completion
 
 ## How swaps work

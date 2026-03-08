@@ -48,3 +48,12 @@ for (const col of collections.collections) {
 ## Developer portal
 
 Use the developer portal to review accumulated fees and initiate collections. Each collection asks for a destination Canton party and transfers directly there.
+
+<Warning>
+Collection history is strongest for `CC (Amulet)` payouts. Utility-token payouts such as `USDCx` can use a `TransferOffer` flow under the hood. In those cases, a completed collection record proves that OneSwap submitted the collection transfer and received a ledger update ID, but it does not independently re-read an external destination wallet balance before marking the collection complete.
+</Warning>
+
+If you collect utility tokens to an external Canton party, verify both:
+
+- the collection record in the developer portal
+- the destination wallet or pending-offer state

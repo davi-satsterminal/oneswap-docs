@@ -1,105 +1,15 @@
 ---
 title: Liquidity
-description: Provide liquidity with direct-party deposits and track LP positions.
+description: Liquidity management is available on the main OneSwap website, not in the public SDK.
 ---
 
-## Add liquidity
+## Liquidity is website-only
 
-```typescript
-const { pools } = await client.pools.list()
-const poolId = pools[0].id
+Use the main OneSwap website when you want to:
 
-const lp = await client.liquidity.create({
-  poolId,
-  amountA: '100',
-  amountB: '150',
-  walletAddress: 'alice::12205a8c...'
-})
+- add liquidity
+- remove liquidity
+- review LP positions
+- inspect LP earnings
 
-console.log(lp.depositAddress) // pool LP party
-console.log(lp.expiresAt)
-```
-
-Both deposits must be sent from the same party specified in `walletAddress`. A different wallet or Canton party will not complete the LP intent.
-
-If the pool is currently `0/0`, the first LP sets the initial ratio manually. Otherwise `amountB` should match the live pool ratio.
-
-## Direct-party LP flow
-
-1. Create the LP intent with the user's Canton party
-2. OneSwap returns the pool LP party as `depositAddress`
-3. Send token A and token B directly from that same party to `depositAddress`
-4. OneSwap matches the two deposits and credits the LP position in the database
-
-## LP security model
-
-- Deposits are **direct-party only**. OneSwap does not create a separate custodial user wallet for LP deposits.
-- Both deposits must come from the **same Canton party** and match the active LP intent for that party.
-- Deposits from a different wallet or Canton party do not satisfy the active LP intent.
-- OneSwap matches liquidity deposits by the **exact deposit holding contracts**, not by sweeping arbitrary balances from the LP party.
-- If only one side arrives, or the deposit does not match the LP intent, the deposit is refunded instead of being partially used.
-- LP positions are **tracked in the OneSwap database**, not as a separate LP token in the user's wallet.
-
-<Warning>
-LP deposits are non-custodial at the token-transfer layer, but LP ownership is still database-tracked. Treat OneSwap as the source of truth for LP balances and withdrawals.
-</Warning>
-
-## Track LP status
-
-```typescript
-lp.on('partial', () => console.log('One token received'))
-lp.on('completed', () => console.log('LP position credited'))
-
-const result = await lp.wait()
-```
-
-Or poll manually:
-
-```typescript
-const status = await client.liquidity.getStatus(lp.intentId)
-```
-
-## Status lifecycle
-
-```
-pending → partial → processing → completed
-        → refunded
-        → failed
-        → expired
-        → cancelled
-```
-
-## Withdrawal safety
-
-- Withdrawals lock the LP balance in the database before any payout starts.
-- Token payouts are transferred directly from the pool swap party to the chosen destination party.
-- The LP balance is only burned after the withdrawal settles successfully.
-- If a withdrawal transfer fails, OneSwap keeps the withdrawal in a recoverable state instead of silently burning the full LP claim.
-
-## View positions
-
-```typescript
-const positions = await client.positions.list('alice::12205a8c...')
-
-for (const pos of positions.positions) {
-  console.log(`${pos.poolName}: ${pos.sharePercent}% share`)
-  console.log(`  ${pos.tokenA}: ${pos.valueTokenA}`)
-  console.log(`  ${pos.tokenB}: ${pos.valueTokenB}`)
-}
-```
-
-The position values returned here use effective reserves. Pending platform, developer, and traffic-fee collections are excluded from the pool balances so LP value reflects what is actually withdrawable by LPs.
-
-## Check earnings
-
-```typescript
-const earnings = await client.positions.getEarnings('alice::12205a8c...', poolId)
-
-console.log(`APR: ${earnings.apr}%`)
-console.log(`Projected daily earnings: ${earnings.estimatedDailyEarnings}`)
-console.log(`LP share: ${earnings.lpSharePercent}%`)
-```
-
-Projected APR and current withdrawable amounts are calculated from the same effective reserve view, not from raw swap-party balances that still include pending fee collections.
-
-Use `client.liquidity.list()` to inspect recent LP intents created through your API key.
+The SDK is intentionally limited to swap flows plus analytics endpoints such as history, tracking, and fee earnings.
