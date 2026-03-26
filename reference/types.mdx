@@ -162,6 +162,7 @@ interface SwapIntentResponse {
   poolId: string
   depositAddress: string
   swapAddress: string
+  depositReference: string
   inputToken: string
   inputTokenAdmin: string
   outputToken: string
@@ -186,6 +187,7 @@ interface SwapStatusResponse {
   actualOutput: string | null
   minOutput: string | null
   slippageTolerance: number
+  depositReference: string | null
   outputAddress: string | null
   matchedAt: string | null
   createdAt: string
@@ -200,6 +202,8 @@ interface CancelSwapResponse {
 `walletAddress` is optional in `CreateSwapParams`, but if you send it, it must match the wallet token supplied in `OneSwapConfig.walletToken`.
 
 `outputAddress` is deprecated in `CreateSwapParams`. Current OneSwap execution resolves swap output back to the same party that made the deposit.
+
+`depositReference` is part of the live swap flow. Include it in the Canton reason/reference field when sending the deposit to the pool party.
 
 ## Wallet auth
 

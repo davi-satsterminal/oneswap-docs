@@ -14,10 +14,10 @@ OneSwap lets you exchange one token for another using automated liquidity pools.
     Choose your input token and amount. OneSwap calculates the expected output using the constant product formula, accounting for fees and price impact.
   </Step>
   <Step title="Create a Swap Intent">
-    Confirm the swap details and set your slippage tolerance. You receive a unique deposit address.
+    Confirm the swap details and set your slippage tolerance. You receive the pool swap party plus a unique transfer reference.
   </Step>
   <Step title="Send Your Tokens">
-    Transfer the input tokens to the deposit address from the same connected wallet party. You currently have **24 hours** to complete the deposit.
+    Transfer the input tokens to the pool swap party from the same connected wallet party and include the transfer reference in the Canton reason/reference field. You currently have **24 hours** to complete the deposit.
   </Step>
   <Step title="Receive Output Tokens">
     OneSwap detects your deposit, executes the swap, and sends the output tokens back to the same wallet party you sent from. No extra steps required.
@@ -96,3 +96,4 @@ Most validation and pricing failures are refunded automatically. Rare operationa
 - **Use reasonable slippage** — 1% works for most swaps. Only increase for volatile markets.
 - **Check the intent deadline** — swap intents currently stay open for 24 hours, and the UI shows the exact `expiresAt`.
 - **Use the same connected wallet party** — deposits from a different party will not complete the swap.
+- **Include the transfer reference** — the pool party is shared across intents, so the reference is what lets OneSwap match your deposit safely.

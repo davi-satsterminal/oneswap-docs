@@ -89,6 +89,7 @@ const swap = await client.swaps.create({
 })
 
 console.log(swap.depositAddress) // pool swap party
+console.log(swap.depositReference) // include in Canton reason/reference field
 console.log(swap.expectedOutput)
 console.log(swap.expiresAt)
 ```
@@ -99,7 +100,7 @@ Swap intents currently remain valid for 24 hours. Use `swap.expiresAt` from the 
 
 ## 7. Send the deposit
 
-The user sends tokens from `partyId` directly to `swap.depositAddress`. Do not send from a different wallet or Canton party, or the swap will not complete.
+The user sends tokens from `partyId` directly to `swap.depositAddress` and includes `swap.depositReference` in the Canton reason/reference field. Do not send from a different wallet or Canton party, or the swap will not complete.
 
 ## 8. Wait for completion
 

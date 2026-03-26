@@ -49,7 +49,7 @@ const swap = await client.swaps.create({
 })
 ```
 
-The returned `depositAddress` is the pool swap party, not the user's own party.
+The returned `depositAddress` is the pool swap party, not the user's own party. Include the returned `depositReference` in the Canton reason/reference field when the user sends the deposit.
 
 ## Using a token getter
 

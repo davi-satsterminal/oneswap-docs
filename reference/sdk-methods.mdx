@@ -73,10 +73,11 @@ Quotes also return `inputTokenAdmin` and `outputTokenAdmin` so you can keep work
 
 ### SwapIntent object
 
-Properties: `intentId`, `poolId`, `depositAddress`, `swapAddress`, `inputToken`, `inputTokenAdmin`, `outputToken`, `outputTokenAdmin`, `expectedAmount`, `expectedOutput`, `minOutput`, `slippageTolerance`, `outputAddress`, `expiresAt`, `instructions`.
+Properties: `intentId`, `poolId`, `depositAddress`, `swapAddress`, `depositReference`, `inputToken`, `inputTokenAdmin`, `outputToken`, `outputTokenAdmin`, `expectedAmount`, `expectedOutput`, `minOutput`, `slippageTolerance`, `outputAddress`, `expiresAt`, `instructions`.
 
 Notes:
 - `depositAddress` is the pool swap party, not the user's own party.
+- `depositReference` must be included in the Canton reason/reference field when the deposit is sent.
 - `client.swaps.create(...)` requires both a valid API key and a wallet-authenticated end-user token.
 - The deposit must be sent from the same signed-in wallet party used to create the swap intent.
 - A different wallet or Canton party will not complete the swap intent.

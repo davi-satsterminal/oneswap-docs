@@ -65,8 +65,8 @@ In SDK params and responses, use `Amulet` when you mean `CC (Amulet)`.
 2. The end user signs a OneSwap challenge with their wallet
 3. OneSwap verifies the signature and returns a short-lived wallet token
 4. You call `client.swaps.create()` with that wallet token attached
-5. OneSwap returns the pool swap party as the `depositAddress`
-6. The user sends tokens directly from that same party to the pool party
+5. OneSwap returns the pool swap party as `depositAddress` plus a `depositReference`
+6. The user sends tokens directly from that same party to the pool party and includes the reference in the Canton reason/reference field
 7. OneSwap executes the swap automatically and returns output to the depositor party
 
 That keeps the flow direct-party and non-custodial without trusting a raw `party ID` string from the browser.

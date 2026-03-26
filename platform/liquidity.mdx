@@ -17,10 +17,10 @@ Liquidity providers (LPs) deposit token pairs into pools and earn a share of eve
     Specify how much of the first token you want to deposit. The required amount of the second token is calculated automatically based on the current pool ratio.
   </Step>
   <Step title="Create an LP Intent">
-    Confirm your deposit. OneSwap returns the pool LP party as the deposit address.
+    Confirm your deposit. OneSwap returns the pool LP party plus a transfer reference for the intent.
   </Step>
   <Step title="Send Both Tokens">
-    Transfer both token amounts from the same party to the LP address. You currently have **24 hours** to complete both deposits.
+    Transfer both token amounts from the same party to the LP address and include the same transfer reference on both Canton transfers. You currently have **24 hours** to complete both deposits.
   </Step>
   <Step title="Receive LP Position">
     Once both deposits are detected, OneSwap credits your LP balance in the database based on your proportional share of the pool.
@@ -53,6 +53,7 @@ After 1,000 swaps generating fees, your 1% share now represents more `CC (Amulet
 - **Both tokens required** — You must deposit both tokens in the pair
 - **Ratio must match** — Deposits must match the current pool ratio (the app calculates this for you)
 - **24-hour window** — Both deposits must arrive before the current LP intent deadline
+- **Transfer reference required** — Include the returned reference on both Canton transfers so OneSwap can match them to the right LP intent
 - **Incomplete deposits are refunded** — If only one token arrives before timeout, it's returned to you
 - **Same sender required** — Both deposits must come from the same Canton party that created the LP intent
 - **One-sided pools are blocked** — Existing pools with a zero reserve on one side reject new liquidity until they are reset
