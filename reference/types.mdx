@@ -48,6 +48,7 @@ interface Quote {
   fee: number                     // swap fee rate, e.g. 0.01 for 1%
   poolId: string
   expiresIn: number               // seconds
+  maxPriceImpact?: number         // server-enforced cap (e.g. 15)
   estimatedTrafficCost?: TrafficCostEstimate
   trafficFeeInInput?: string      // traffic recovery converted into the input token
   inputAmountAfterTrafficFee?: string
@@ -136,6 +137,7 @@ type SwapStatus =
   | 'sending_output'
   | 'completed'
   | 'slippage_failed'
+  | 'price_impact_exceeded'
   | 'insufficient_liquidity'
   | 'insufficient_amount'
   | 'output_failed'
@@ -278,6 +280,7 @@ class AmbiguousPoolPairError extends ConflictError {
   candidates: AmbiguousPoolPairResponse['candidates']
 }
 class SlippageError extends OneSwapError {}    // swap refunded
+class PriceImpactError extends OneSwapError {}  // price impact exceeded server cap
 class InsufficientLiquidityError extends OneSwapError {}
 class InsufficientAmountError extends OneSwapError {}
 class OutputFailedError extends OneSwapError {}

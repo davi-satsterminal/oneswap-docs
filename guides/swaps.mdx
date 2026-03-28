@@ -80,6 +80,10 @@ const swap = await client.swaps.create({
 
 If the actual output falls below `minOutput`, the swap is refunded.
 
+## Maximum price impact
+
+OneSwap enforces a server-side price impact cap (currently 15%). If a swap would move the pool price beyond this limit, the quote endpoint returns a `400` error and any deposited funds are refunded automatically with status `price_impact_exceeded`. The cap is returned in `quote.maxPriceImpact`. To execute large swaps, either split them into smaller amounts or add liquidity to the pool first.
+
 ## Output routing
 
 The current SDK flow always returns swap output to the same Canton party that sends the deposit. `outputAddress` remains in the type surface for backward compatibility, but the SDK ignores it and `/api/v1/swaps` resolves output back to the depositor party.
@@ -135,6 +139,7 @@ swap.on('processing', () => console.log('Deposit detected'))
 swap.on('sending_output', () => console.log('Sending payout'))
 swap.on('completed', (s) => console.log(`Got ${s.actualOutput}`))
 swap.on('slippage_failed', () => console.log('Refunded: price moved'))
+swap.on('price_impact_exceeded', () => console.log('Refunded: price impact too high'))
 swap.on('insufficient_amount', () => console.log('Refunded: below traffic cost'))
 swap.on('output_failed', () => console.log('Output transfer failed, input was refunded'))
 swap.on('refund_failed', () => console.log('Refund failed, manual intervention required'))
@@ -161,6 +166,7 @@ await swap.cancel()
 pending → matched → deposit_received → forwarded → processing → sending_output → completed
         → cancelled
         → slippage_failed
+        → price_impact_exceeded
         → insufficient_amount
         → insufficient_liquidity
         → output_failed
@@ -186,6 +192,7 @@ const quote = await client.quotes.get({
 `quote.estimatedTrafficCost`, `quote.trafficFeeInInput`, and `quote.inputAmountAfterTrafficFee` help you account for Canton execution costs before the swap executes.
 
 - `inputTokenAdmin` and `outputTokenAdmin` identify the exact instruments that were priced.
+- `maxPriceImpact` is the server-enforced price impact cap. Swaps exceeding this are rejected.
 - `trafficFeeInInput` is the amount deducted from the input token as traffic-cost recovery.
 - `outputAmount` is quoted from `inputAmountAfterTrafficFee`, not from the gross deposit amount.
 - `receiverParty` lets the quote include the same destination-party traffic assumptions used by the live execution path.

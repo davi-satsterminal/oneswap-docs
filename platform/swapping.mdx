@@ -79,6 +79,7 @@ Common terminal failure states:
 | `expired` | No deposit was received before the current 24-hour intent deadline |
 | `cancelled` | The intent was cancelled before execution started |
 | `slippage_failed` | Price moved beyond your tolerance |
+| `price_impact_exceeded` | Swap would move the pool price beyond the maximum allowed (currently 15%) |
 | `insufficient_amount` | Deposit was below the minimum needed to cover traffic cost |
 | `insufficient_liquidity` | Pool didn't have enough reserves |
 | `output_failed` | Output transfer failed after execution; the input refund succeeded |
@@ -92,7 +93,7 @@ Most validation and pricing failures are refunded automatically. Rare operationa
 
 ## Tips
 
-- **Check price impact** before large swaps. High impact means you're moving the price significantly.
+- **Check price impact** before large swaps. High impact means you're moving the price significantly. Swaps exceeding the 15% price impact cap are automatically rejected.
 - **Use reasonable slippage** — 1% works for most swaps. Only increase for volatile markets.
 - **Check the intent deadline** — swap intents currently stay open for 24 hours, and the UI shows the exact `expiresAt`.
 - **Use the same connected wallet party** — deposits from a different party will not complete the swap.

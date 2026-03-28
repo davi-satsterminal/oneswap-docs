@@ -16,6 +16,7 @@ import {
   NotFoundError,    // 404 — pool/intent/party not found
   RateLimitError,   // 429 — too many requests
   SlippageError,    // swap output below minimum
+  PriceImpactError, // swap rejected because price impact exceeded the server cap
   InsufficientLiquidityError, // swap refunded because the pool was too thin
   InsufficientAmountError, // swap refunded because input was below traffic cost
   OutputFailedError,// swap output transfer failed
@@ -37,6 +38,8 @@ try {
 } catch (err) {
   if (err instanceof SlippageError) {
     console.log('Swap refunded due to slippage')
+  } else if (err instanceof PriceImpactError) {
+    console.log('Swap rejected — price impact exceeds the maximum allowed')
   } else if (err instanceof InsufficientLiquidityError) {
     console.log('Swap refunded due to insufficient liquidity')
   } else if (err instanceof InsufficientAmountError) {
@@ -86,6 +89,7 @@ err.response   // raw response body from the API
 | `NotFoundError` | Pool or intent doesn't exist | Check the ID |
 | `RateLimitError` | Too many requests | Back off and retry |
 | `SlippageError` | Price moved during swap | Retry with higher tolerance or try again |
+| `PriceImpactError` | Swap would move the price beyond the server-enforced cap (default 15%) | Reduce swap size or add liquidity to the pool |
 | `InsufficientLiquidityError` | The pool could not fill the swap | Retry later or reduce size |
 | `InsufficientAmountError` | A created swap was refunded because the live traffic cost exceeded the deposit | Increase the amount and create a new intent |
 | `OutputFailedError` | Output payout failed or the swap party had no output holdings | Inspect the terminal intent status before retrying |
