@@ -78,11 +78,12 @@ Quotes also return `inputTokenAdmin` and `outputTokenAdmin` so you can keep work
 | `fromToken` | yes | Input token |
 | `toToken` | yes | Output token |
 | `amount` | yes | Swap amount to price into the pool. The returned intent tells you the larger total deposit amount after adding the estimated network fee. |
-| `slippageTolerance` | no | `0.001`–`0.5`, default `0.01` |
+| `slippageTolerance` | no | `0.001`–`0.05` (0.1%–5%), default `0.05`. Validated client-side; non-finite or out-of-range values throw `ValidationError` before any request is sent. |
 | `walletAddress` | no | Optional sender `party ID` for UI clarity. If present, it must match the authenticated wallet token. |
 | `poolId` | no | Preferred disambiguator when the token pair can map to more than one pool. |
 | `fromAdmin` | no | Exact admin for the input token when token symbols are reused. |
 | `toAdmin` | no | Exact admin for the output token when token symbols are reused. |
+| `idempotencyKey` | no | Client-supplied key forwarded to the backend for safe retries after a lost response. (Server-side dedup on this key is not yet implemented; rely on the active-intent guard for now.) |
 | `outputAddress` | no | Deprecated. Ignored by the SDK client because the current execution flow always pays back to the depositor party. |
 
 ### SwapIntent object

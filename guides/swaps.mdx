@@ -70,7 +70,7 @@ Swap intents currently remain valid for 24 hours. Use `swap.expiresAt` from the 
 
 ## Slippage tolerance
 
-Default is 1%. You can set it between 0.1% (`0.001`) and 50% (`0.5`):
+Default is 5% (`0.05`). You can set it between 0.1% (`0.001`) and 5% (`0.05`). The SDK validates this client-side — non-finite or out-of-range values throw `ValidationError` before a request is sent, rather than silently falling back to the default:
 
 ```typescript
 const swap = await client.swaps.create({
@@ -134,7 +134,7 @@ If you omit those fields for an ambiguous pair, the API returns `409 ambiguous_p
 const result = await swap.wait()
 ```
 
-`swap.wait()` resolves on `completed`. It throws typed errors for terminal failures, including `ExpiredError` when the intent expires or when polling observes a cancelled intent.
+`swap.wait()` resolves on `completed`. It throws typed errors for terminal failures, including `ExpiredError` when the backend reports the intent expired or cancelled. Individual polls that hit a transient `NetworkError`, `TimeoutError`, `ServerError`, or `RateLimitError` are retried automatically until the deadline, so a single blip won't abandon a settling swap. If the local `timeout` is reached, `wait()` throws `TimeoutError` (a client-side deadline) — the swap may still be settling, so resume with `client.swaps.getStatus(swap.intentId)` rather than treating it as failed.
 
 ### Listen to events
 

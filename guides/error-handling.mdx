@@ -10,6 +10,7 @@ Every error thrown by the SDK is an instance of `OneSwapError`:
 ```typescript
 import {
   ConflictError,    // 409 — active intent or other request conflict
+  ActiveSwapIntentError, // 409 — active swap intent already exists (exposes existingIntentId)
   AmbiguousPoolPairError, // 409 — token pair maps to multiple pools
   AuthError,        // 401 — invalid or missing API key or wallet token
   ValidationError,  // 400 — bad parameters
@@ -22,9 +23,9 @@ import {
   OutputFailedError,// swap output transfer failed
   SwapFailedError,  // generic terminal swap failure
   RefundFailedError,// swap refund failed
-  ExpiredError,     // intent expired before completion
+  ExpiredError,     // backend marked the intent expired or cancelled
   NetworkError,     // transport-level failure before an HTTP response
-  TimeoutError,     // request timeout
+  TimeoutError,     // client-side request timeout or wait() polling deadline
   ServerError       // 500 — something went wrong on our end
 } from '@oneswap/sdk'
 ```
@@ -51,20 +52,29 @@ try {
   } else if (err instanceof SwapFailedError) {
     console.log('Swap failed — inspect the intent before retrying')
   } else if (err instanceof ExpiredError) {
-    console.log('Swap expired or was cancelled before completion')
+    console.log('Backend marked the intent expired or cancelled')
   } else if (err instanceof AmbiguousPoolPairError) {
     console.log(err.candidates)
+  } else if (err instanceof ActiveSwapIntentError) {
+    // An active intent already exists — resume it instead of creating a duplicate
+    const status = await client.swaps.getStatus(err.existingIntentId)
   } else if (err instanceof ConflictError) {
     console.log(err.message)
   } else if (err instanceof AuthError) {
     console.log('Check your API key and repeat wallet authentication if needed')
   } else if (err instanceof ValidationError) {
     console.log(err.message)
-  } else if (err instanceof TimeoutError || err instanceof NetworkError) {
+  } else if (err instanceof TimeoutError) {
+    // Client-side deadline (one request, or the wait() polling loop).
+    // The swap may still be settling — resume with client.swaps.getStatus(id).
+    console.log('Client timed out; the swap may still be settling')
+  } else if (err instanceof NetworkError) {
     console.log(err.message)
   }
 }
 ```
+
+Check `ActiveSwapIntentError` **before** `ConflictError` — it is a subclass, so the generic `ConflictError` branch would otherwise swallow it. It exposes `existingIntentId` and `existingIntentSource` so you can resume or cancel the existing intent rather than parsing the raw response.
 
 `PriceImpactError` is raised by `swap.wait()` after a created intent reaches terminal status `price_impact_exceeded`. Quote-time or create-time price-impact rejections are plain `ValidationError` responses because the API returns HTTP `400`.
 
@@ -85,7 +95,8 @@ err.response   // raw response body from the API
 | Error | When | What to do |
 |---|---|---|
 | `AmbiguousPoolPairError` | The same token symbols exist under multiple admins | Retry with `poolId` or both token admin fields |
-| `ConflictError` | Another active swap intent already exists for this wallet, pool, and input token | Reuse, cancel, or wait for the existing intent before creating another |
+| `ActiveSwapIntentError` | An active swap intent already exists for this wallet, pool, and input token (subclass of `ConflictError`) | Resume the existing intent via `err.existingIntentId`, or cancel it before creating another |
+| `ConflictError` | Some other request conflict not covered by a more specific subclass | Inspect `err.message` |
 | `AuthError` | API key is wrong, missing, or the wallet token is invalid/expired | Check your key and refresh wallet auth |
 | `ValidationError` | Bad params or preflight validation failed (missing field, invalid amount, token/pool mismatch) | Fix the request |
 | `NotFoundError` | Pool or intent doesn't exist | Check the ID |
@@ -100,7 +111,7 @@ err.response   // raw response body from the API
 | `ValidationError` (400) | Quote or intent creation failed because price impact already exceeded the server cap | Reduce swap size or add liquidity before retrying |
 | `ValidationError` (400) | Quote or intent creation failed because the amount was below the estimated network cost | Increase the swap amount. The error response includes `minimumAmount`. |
 | `ExpiredError` | The swap intent expired after its current 24-hour deposit window, or `swap.wait()` observed a cancelled intent | Create a new intent if needed |
-| `TimeoutError` | The SDK request timed out before the API replied | Retry the request or increase `timeout` |
+| `TimeoutError` | A single SDK request timed out, or `swap.wait()` reached its local polling deadline | The swap may still be settling — resume with `client.swaps.getStatus(intentId)`, or increase `timeout` |
 | `NetworkError` | The request failed before an HTTP response was received | Retry after checking connectivity |
 | `ServerError` | Our problem | Retry after a moment |
 
@@ -112,3 +123,5 @@ const result = await swap.wait({
   timeout: 600000       // give up after 10 minutes (default: 35min)
 })
 ```
+
+`wait()` is resilient to transient failures: a poll that fails with `NetworkError`, `TimeoutError`, `ServerError` (5xx), or `RateLimitError` is retried on the next interval rather than aborting the wait. Non-transient errors (`AuthError`, `ValidationError`, etc.) propagate immediately. Reaching `timeout` throws `TimeoutError` — a client-side deadline, not an on-chain expiry.

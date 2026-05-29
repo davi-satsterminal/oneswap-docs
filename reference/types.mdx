@@ -166,6 +166,7 @@ interface CreateSwapParams {
   poolId?: string
   fromAdmin?: string
   toAdmin?: string
+  idempotencyKey?: string
   outputAddress?: string
 }
 
@@ -299,6 +300,10 @@ class ConflictError extends OneSwapError {}    // 409
 class AmbiguousPoolPairError extends ConflictError {
   candidates: AmbiguousPoolPairResponse['candidates']
 }
+class ActiveSwapIntentError extends ConflictError { // 409 — active intent already exists
+  existingIntentId: string | null
+  existingIntentSource?: string
+}
 class SlippageError extends OneSwapError {}    // swap refunded
 class PriceImpactError extends OneSwapError {}  // price impact exceeded server cap
 class InsufficientLiquidityError extends OneSwapError {}
@@ -306,8 +311,8 @@ class InsufficientAmountError extends OneSwapError {}
 class OutputFailedError extends OneSwapError {}
 class SwapFailedError extends OneSwapError {}
 class RefundFailedError extends OneSwapError {}
-class ExpiredError extends OneSwapError {}     // intent timed out or was cancelled
+class ExpiredError extends OneSwapError {}     // backend marked the intent expired or cancelled
 class ServerError extends OneSwapError {}      // 500
 class NetworkError extends OneSwapError {}
-class TimeoutError extends OneSwapError {}
+class TimeoutError extends OneSwapError {}     // client-side request timeout or wait() polling deadline
 ```
