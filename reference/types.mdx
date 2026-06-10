@@ -60,10 +60,51 @@ interface Quote {
   maxPriceImpact?: number         // server-enforced cap (e.g. 15)
   estimatedTrafficCost?: TrafficCostEstimate
   trafficFeeInInput?: string      // legacy alias of networkFeeAmount
+  networkFeePolicy?: NetworkFeePolicyApplication | null   // present when a network-fee discount applies
+  platformFeePolicy?: PlatformFeePolicyApplication | null // present when a platform-fee discount applies
 }
 ```
 
 `inputAmount` is the exact deposit amount you want the user to send. OneSwap deducts the estimated network fee internally from that deposit, then deducts the 0.3% pool fee from the remainder before pricing the output. `totalInputAmount` currently echoes that exact deposit amount, and `outputAmount` is priced from `inputAmountAfterPoolFee`.
+
+## Fee discounts
+
+A swap can receive a fee discount targeted at the trader's **SDK API key**, their **wallet party**, or the **pool** itself. When more than one applies, the one most favorable to the trader wins ("best for trader"). The discount is already reflected in the charged amount fields (`networkFeeAmount`, `platformFeeAmount`, `poolFeeAmount`), and the applied policy is returned in `networkFeePolicy` / `platformFeePolicy` — each is `null` when no discount applies. The same fields appear on [`SwapIntentResponse`](#swap).
+
+```typescript
+interface NetworkFeePolicyApplication {
+  policyId: string
+  targetType: 'sdk_api_key' | 'wallet_party' | 'pool' // who the discount is attached to
+  targetId: string
+  mode: 'cap' | 'percentage'
+  maxFeeCc: string | null              // cap mode: max network fee, in CC
+  chargeBps: number | null             // percentage mode: bps of the fee charged (7000 = pay 70%)
+  estimatedNetworkFeeCc: string        // full network fee (CC), before discount
+  chargedNetworkFeeCc: string          // network fee charged (CC), after discount
+  estimatedNetworkFeeAmount: string    // full network fee, in the input token
+  chargedNetworkFeeAmount: string      // network fee charged, in the input token
+}
+
+interface PlatformFeePolicyApplication {
+  policyId: string
+  targetType: 'sdk_api_key' | 'wallet_party' | 'pool'
+  targetId: string
+  mode: 'cap' | 'percentage'
+  maxFeeBps: number | null             // cap mode: max platform fee, in bps
+  chargeBps: number | null             // percentage mode: bps of the fee charged
+  fullPlatformFeeRate: string          // full platform-fee rate, before discount
+  chargedPlatformFeeRate: string       // platform-fee rate charged, after discount
+  discountBps: number                  // discount off the platform fee (3000 = 30% off)
+}
+```
+
+<Note>
+  The top-level `fee` field is the pool's **nominal** rate and does **not** reflect any
+  discount — read the charged **amount** fields, or the policy snapshots for the
+  before/after. A wallet discount is only resolved in `getQuote` when you pass
+  `receiverParty`; SDK-key and pool discounts always resolve. The bottom line a trader
+  feels is a larger `outputAmount`.
+</Note>
 
 ## Pool
 

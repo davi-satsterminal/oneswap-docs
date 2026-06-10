@@ -56,6 +56,47 @@ In SDK params and responses, use `Amulet` when you mean `CC (Amulet)`.
 
 Quotes also return `inputTokenAdmin` and `outputTokenAdmin` so you can keep working with the exact instrument identity that was priced.
 
+### Fee discounts
+
+If a fee discount applies — from the SDK API key, the wallet party, or the pool (see [Fee discounts](/reference/types#fee-discounts)) — the charged amount fields already reflect it, and the applied policy is returned in `networkFeePolicy` / `platformFeePolicy` (otherwise `null`). The same quote without and with a pool discount (50% off network, 30% off platform):
+
+<CodeGroup>
+```json No discount
+{
+  "outputAmount": "0.0000277700",
+  "fee": 0.003,
+  "networkFeeAmount": "7.2871950000",
+  "platformFeeAmount": "0.0132846037",
+  "networkFeePolicy": null,
+  "platformFeePolicy": null
+}
+```
+
+```json With discount
+{
+  "outputAmount": "0.0000334890",            // +20.6% more output
+  "fee": 0.003,                              // nominal rate — unchanged
+  "networkFeeAmount": "3.6435975000",        // 50% off
+  "platformFeeAmount": "0.0112121113",
+  "networkFeePolicy": {
+    "targetType": "pool",
+    "chargeBps": 5000,
+    "estimatedNetworkFeeAmount": "7.2871950000",
+    "chargedNetworkFeeAmount": "3.6435975000"
+  },
+  "platformFeePolicy": {
+    "targetType": "pool",
+    "chargeBps": 7000,
+    "fullPlatformFeeRate": "0.0007500000",
+    "chargedPlatformFeeRate": "0.0005250000",
+    "discountBps": 3000
+  }
+}
+```
+</CodeGroup>
+
+The top-level `fee` rate stays nominal regardless of the discount — read the charged amount fields or `discountBps`. A wallet discount only resolves in a quote when you pass `receiverParty`.
+
 ## Swaps
 
 | Method | Description |
