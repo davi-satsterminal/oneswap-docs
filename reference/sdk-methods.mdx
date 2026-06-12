@@ -41,6 +41,7 @@ In SDK params and responses, use `Amulet` when you mean `CC (Amulet)`.
 | `client.pools.list()` | All pools with effective reserves, fee, and LP supply |
 | `client.pools.get(poolId)` | Pool detail with `swapAddress` and `lpAddress` |
 | `client.pools.getStats(poolId, { days? })` | `apr`, `apy`, `volume24h`, `fees24h`, `lpFees24h`, `tvl`, `swapCount24h`, and APR metadata computed from fee events and effective reserves. Default lookback is 7 days. |
+| `client.pools.getTicker(poolId)` | USD-denominated `price`, `priceChange24h`, and `volume24h` for a pool. Live price and volume are derived from effective reserves and fee events (via the canonical CC/USDCx pool); `priceChange24h` comes from hourly USD snapshots and is `null` until ~24h of history exists. |
 
 ## Tokens
 
