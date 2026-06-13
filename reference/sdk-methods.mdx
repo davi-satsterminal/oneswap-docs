@@ -57,6 +57,8 @@ In SDK params and responses, use `Amulet` when you mean `CC (Amulet)`.
 
 Quotes also return `inputTokenAdmin` and `outputTokenAdmin` so you can keep working with the exact instrument identity that was priced.
 
+The quote response also includes a top-level `settlementSafety` field — `null` when the swap is clear to proceed, or `{ code, reason, message }` when a swap of this size/timing would be blocked at settlement. Inspect it before calling `swaps.create`; see [Settlement safety](#settlement-safety).
+
 ### Fee discounts
 
 If a fee discount applies — from the SDK API key, the wallet party, or the pool (see [Fee discounts](/reference/types#fee-discounts)) — the charged amount fields already reflect it, and the applied policy is returned in `networkFeePolicy` / `platformFeePolicy` (otherwise `null`). The same quote without and with a pool discount (50% off network, 30% off platform):
@@ -102,9 +104,15 @@ The top-level `fee` rate stays nominal regardless of the discount — read the c
 
 | Method | Description |
 |---|---|
-| `client.swaps.create(params)` | Create a wallet-authenticated swap intent |
+| `client.swaps.create(params)` | Create a wallet-authenticated swap intent. Can throw `SettlementSafetyError` (HTTP `400`) when the pre-payout safety guard blocks the swap — no intent is created. |
 | `client.swaps.getStatus(intentId)` | Poll swap status for the authenticated wallet party |
 | `client.swaps.cancel(intentId)` | Cancel a pending swap intent for the authenticated wallet party |
+
+### Settlement safety
+
+`quotes.get` returns a top-level `settlementSafety` field. It is `null` when the swap is clear, or `{ code, reason, message }` when a swap of this size/timing would be blocked at settlement before any payout. `code` is one of `output_reserve_share_exceeded`, `output_velocity_exceeded`, `reserve_price_deviation_exceeded`, `reference_price_deviation_exceeded`, `incomplete_completed_accounting`, `invalid_output_reserve`, `invalid_execution_price`, or `settlement_safety_guard_unavailable`.
+
+Check it before calling `swaps.create`. If you skip the check and the guard would block, `swaps.create` returns HTTP `400` and the SDK throws [`SettlementSafetyError`](/guides/error-handling#settlement-safety-guard) (which carries the same `code`/`reason`/`message`); no intent is created and no deposit happens.
 
 ## Wallet auth
 

@@ -14,6 +14,7 @@ import {
   AmbiguousPoolPairError, // 409 — token pair maps to multiple pools
   AuthError,        // 401 — invalid or missing API key or wallet token
   ValidationError,  // 400 — bad parameters
+  SettlementSafetyError, // 400 — swaps.create blocked by the pre-payout safety guard (exposes code/reason)
   NotFoundError,    // 404 — pool/intent/party not found
   RateLimitError,   // 429 — too many requests
   SlippageError,    // swap output below minimum
@@ -62,6 +63,10 @@ try {
     console.log(err.message)
   } else if (err instanceof AuthError) {
     console.log('Check your API key and repeat wallet authentication if needed')
+  } else if (err instanceof SettlementSafetyError) {
+    // swaps.create was blocked by the pre-payout safety guard before any deposit.
+    // No intent was created. Reduce the swap size or wait a few minutes, then retry.
+    console.log(err.message, err.code, err.reason)
   } else if (err instanceof ValidationError) {
     console.log(err.message)
   } else if (err instanceof TimeoutError) {
@@ -78,6 +83,25 @@ Check `ActiveSwapIntentError` **before** `ConflictError` — it is a subclass, s
 
 `PriceImpactError` is raised by `swap.wait()` after a created intent reaches terminal status `price_impact_exceeded`. Quote-time or create-time price-impact rejections are plain `ValidationError` responses because the API returns HTTP `400`.
 
+## Settlement safety guard
+
+`swaps.create` runs a pre-payout safety guard. When a swap of this size or timing would be blocked at settlement, the API returns HTTP `400`, the SDK throws `SettlementSafetyError`, and **no intent is created — no deposit happens**. `SettlementSafetyError` is a subclass of `ValidationError`, so check it **before** the generic `ValidationError` branch.
+
+```typescript
+try {
+  const swap = await client.swaps.create({ ... })
+} catch (err) {
+  if (err instanceof SettlementSafetyError) {
+    // No intent was created. Reduce the swap size or wait a few minutes, then retry.
+    console.log(err.message)        // user-facing sentence
+    console.log(err.code)           // e.g. 'output_velocity_exceeded'
+    console.log(err.reason)         // technical detail (bps/thresholds)
+  }
+}
+```
+
+To avoid hitting this on create, inspect `quote.settlementSafety` first — it is `null` when the swap is clear to proceed, and carries the same `{ code, reason, message }` when a swap that size would be blocked.
+
 ## Error properties
 
 All errors have:
@@ -90,6 +114,8 @@ err.response   // raw response body from the API
 
 `AmbiguousPoolPairError` also exposes `err.candidates`, which lists the matching pools and token admins you can use to retry with `poolId`, `fromAdmin`, or `toAdmin`.
 
+`SettlementSafetyError` also exposes `err.code` (the machine-readable block reason) and `err.reason` (the technical detail), in addition to the user-facing `err.message`.
+
 ## Common scenarios
 
 | Error | When | What to do |
@@ -99,6 +125,7 @@ err.response   // raw response body from the API
 | `ConflictError` | Some other request conflict not covered by a more specific subclass | Inspect `err.message` |
 | `AuthError` | API key is wrong, missing, or the wallet token is invalid/expired | Check your key and refresh wallet auth |
 | `ValidationError` | Bad params or preflight validation failed (missing field, invalid amount, token/pool mismatch) | Fix the request |
+| `SettlementSafetyError` (400) | `swaps.create` was blocked by the pre-payout safety guard; no intent was created (subclass of `ValidationError`) | Reduce the swap size or wait a few minutes, then retry. Inspect `err.code`/`err.reason`, or check `quote.settlementSafety` first |
 | `NotFoundError` | Pool or intent doesn't exist | Check the ID |
 | `RateLimitError` | Too many requests | Back off and retry |
 | `SlippageError` | Price moved during swap | Retry with higher tolerance or try again |

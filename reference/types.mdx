@@ -62,10 +62,19 @@ interface Quote {
   trafficFeeInInput?: string      // legacy alias of networkFeeAmount
   networkFeePolicy?: NetworkFeePolicyApplication | null   // present when a network-fee discount applies
   platformFeePolicy?: PlatformFeePolicyApplication | null // present when a platform-fee discount applies
+  settlementSafety?: SettlementSafetyInfo | null          // null when clear; non-null when a swap this size would be blocked
+}
+
+interface SettlementSafetyInfo {
+  code: string     // machine-readable block reason, e.g. 'output_velocity_exceeded'
+  reason: string   // technical detail (bps/thresholds)
+  message: string  // user-facing sentence
 }
 ```
 
 `inputAmount` is the exact deposit amount you want the user to send. OneSwap deducts the estimated network fee internally from that deposit, then deducts the 0.3% pool fee from the remainder before pricing the output. `totalInputAmount` currently echoes that exact deposit amount, and `outputAmount` is priced from `inputAmountAfterPoolFee`.
+
+`settlementSafety` is `null` when the swap is clear to proceed. A non-null `SettlementSafetyInfo` means a swap of this size/timing would be blocked at settlement by the pre-payout safety guard — inspect it before calling `swaps.create`, which would otherwise return `400` and throw `SettlementSafetyError`.
 
 ## Fee discounts
 
@@ -335,6 +344,10 @@ class OneSwapError extends Error {
 
 class AuthError extends OneSwapError {}        // 401
 class ValidationError extends OneSwapError {}  // 400
+class SettlementSafetyError extends ValidationError { // 400 — swaps.create blocked by the settlement safety guard
+  code: string
+  reason: string
+}
 class NotFoundError extends OneSwapError {}    // 404
 class RateLimitError extends OneSwapError {}   // 429
 class ConflictError extends OneSwapError {}    // 409

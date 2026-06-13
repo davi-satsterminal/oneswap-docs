@@ -88,6 +88,22 @@ If the actual output falls below `minOutput`, the swap is refunded.
 
 OneSwap enforces a server-side price impact cap (currently 15%). If a quote or swap-intent creation request would move the pool price beyond this limit, the API returns `400` and the SDK surfaces that as `ValidationError`. If an already-created intent later crosses the same cap during execution, it reaches terminal status `price_impact_exceeded` and `swap.wait()` throws `PriceImpactError`. The cap is returned in `quote.maxPriceImpact`. To execute large swaps, either split them into smaller amounts or add liquidity to the pool first.
 
+## Settlement safety
+
+OneSwap runs a pre-payout settlement safety guard. Before calling `swaps.create`, check `quote.settlementSafety` — it is `null` when the swap is clear, or `{ code, reason, message }` when a swap of this size/timing would be blocked at settlement.
+
+```typescript
+const quote = await client.quotes.get({ from: 'Amulet', to: 'USDCx', amount: '100' })
+
+if (quote.settlementSafety) {
+  console.log(quote.settlementSafety.message) // reduce the swap size or wait a few minutes
+} else {
+  const swap = await client.swaps.create({ fromToken: 'Amulet', toToken: 'USDCx', amount: '100' })
+}
+```
+
+If you skip the check and the guard would block, `swaps.create` returns `400` and throws `SettlementSafetyError` — no intent is created and no deposit happens. Reduce the swap size or wait a few minutes, then retry.
+
 ## Output routing
 
 The current SDK flow always returns swap output to the same Canton party that sends the deposit. `outputAddress` remains in the type surface for backward compatibility, but the SDK ignores it and `/api/v1/swaps` resolves output back to the depositor party.
