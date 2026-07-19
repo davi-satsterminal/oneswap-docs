@@ -1,0 +1,122 @@
+---
+title: "API keys"
+description: "Create, rotate, and revoke the SDK keys that authenticate your escrow requests."
+---
+
+Every escrow request is authenticated with an **integrator API key**. You create and manage keys from your OneSwap account (self-serve), then pass the key to the SDK.
+
+## Key format
+
+A key looks like `sk_live_` followed by **48 hex characters**:
+
+```
+sk_live_0a1b2c3d…4e5f6071   # sk_live_ + 48 hex chars (shown once, at creation)
+```
+
+<Warning>
+  The plaintext key is shown **once**, at creation. OneSwap stores only a hash of it, so it
+  cannot be shown again. If you lose a key, mint a new one and revoke the old.
+</Warning>
+
+## How the SDK uses the key
+
+Pass the key when you construct the client. The SDK sends it on every escrow request as the HTTP header `x-sdk-key`:
+
+```typescript
+import { OneSwap } from '@oneswap/sdk'
+
+const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
+```
+
+## Creating a key
+
+Key management uses your **account session** (`Authorization: Bearer <session>`), not the SDK key. Create a key with an optional label:
+
+```bash
+curl -X POST https://api.oneswap.cc/swapv2/api/account/sdk-keys \
+  -H "Authorization: Bearer <session>" \
+  -H "Content-Type: application/json" \
+  -d '{ "label": "production backend" }'
+```
+
+Response — the `key` field is the plaintext `sk_live_...`, shown **once**:
+
+```json
+{
+  "id": "key_...",
+  "key": "sk_live_...",
+  "label": "production backend"
+}
+```
+
+Copy the `key` value into your server's secret store immediately.
+
+## Listing keys
+
+Listing never returns the secret again — only metadata:
+
+```bash
+curl https://api.oneswap.cc/swapv2/api/account/sdk-keys \
+  -H "Authorization: Bearer <session>"
+```
+
+```json
+{
+  "keys": [
+    {
+      "id": "key_...",
+      "label": "production backend",
+      "active": true,
+      "ratePerMin": 60,
+      "createdAt": "2026-07-18T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+`ratePerMin` is the key's per-minute rate limit — see [Rate limits](#rate-limits).
+
+## Rotating a key
+
+There is no in-place rotation. To rotate:
+
+1. Create a new key (`POST /api/account/sdk-keys`).
+2. Deploy it to your servers.
+3. Revoke the old key once nothing uses it.
+
+## Revoking a key
+
+Revoke (delete) a key by id. This is how you rotate out a leaked or retired key:
+
+```bash
+curl -X DELETE https://api.oneswap.cc/swapv2/api/account/sdk-keys/key_... \
+  -H "Authorization: Bearer <session>"
+```
+
+```json
+{ "ok": true }
+```
+
+## Rate limits
+
+Each key has a per-minute rate limit (`ratePerMin`). The two escrow endpoints are tiered relative to it:
+
+| Operation | Limit |
+|---|---|
+| Create a swap (`POST /api/sdk/escrow/swap`) | The tightest tier — **1×** the key's per-minute limit |
+| Poll a swap (`GET /api/sdk/escrow/swap/:id`) | **4×** the create rate |
+
+Exceeding a limit returns HTTP `429`. Back off and retry — see [Error handling](/guides/error-handling).
+
+## Security best practices
+
+<Warning>
+  Treat your `sk_live_` key like a password. Anyone with it can create escrow swaps under your
+  integrator account.
+</Warning>
+
+- **Server-side only.** Keep the key on your backend. Never ship it to a browser, mobile app, or any end-user surface.
+- **Never expose it to end-users.** Your users interact with a deposit party — they never need, and must never see, your key.
+- **Store it in a secret manager**, not in source control or client bundles.
+- **Use separate keys** per environment or service so you can revoke one without disrupting the others.
+- **Revoke immediately** if a key is exposed, then create a replacement.

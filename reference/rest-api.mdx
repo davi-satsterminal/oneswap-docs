@@ -1,0 +1,232 @@
+---
+title: "REST API"
+description: "Raw HTTP for escrow swaps and API-key management."
+---
+
+The SDK wraps these HTTP endpoints. If you integrate from a non-JS backend, call them directly.
+
+## Base URL
+
+```
+https://api.oneswap.cc/swapv2
+```
+
+For local development use `http://localhost:8799`.
+
+## Authentication
+
+There are two auth schemes, one per endpoint group:
+
+| Endpoints | Header |
+|---|---|
+| Escrow (`/api/sdk/escrow/*`) | `x-sdk-key: sk_live_...` — your integrator API key |
+| API-key management (`/api/account/sdk-keys*`) | `Authorization: Bearer <session>` — your account session |
+
+<Note>
+  The account key-management endpoints authenticate with your **account session**, not the SDK key.
+  You use them to mint the `sk_live_` key that then authenticates the escrow endpoints.
+</Note>
+
+---
+
+## Escrow endpoints
+
+Escrow calls require the header `x-sdk-key: sk_live_...`.
+
+### Create a swap
+
+```http
+POST /api/sdk/escrow/swap
+```
+
+Request body:
+
+<ParamField body="userRef" type="string" required>
+  Your stable id for the end-user. Only one open swap per `userRef` at a time.
+</ParamField>
+<ParamField body="inSymbol" type="string" required>
+  Token the user deposits, e.g. `CBTC`.
+</ParamField>
+<ParamField body="amountIn" type="number" required>
+  Decimal amount of `inSymbol` to swap.
+</ParamField>
+<ParamField body="outSymbol" type="string" required>
+  Token to return to the user, e.g. `HTEST`.
+</ParamField>
+<ParamField body="minOut" type="number">
+  Optional hard floor on output; below it the swap is refunded.
+</ParamField>
+<ParamField body="slippageBps" type="number" default="200">
+  Optional slippage tolerance in basis points. Defaults to `200` (2%).
+</ParamField>
+
+Returns an [`EscrowSwap`](/reference/types#escrowswap) with `status: "awaiting_deposit"`.
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.oneswap.cc/swapv2/api/sdk/escrow/swap \
+  -H "x-sdk-key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userRef": "user-1042",
+    "inSymbol": "CBTC",
+    "amountIn": 0.01,
+    "outSymbol": "HTEST",
+    "minOut": 0.95,
+    "slippageBps": 100
+  }'
+```
+
+```json Response
+{
+  "id": "esc_...",
+  "status": "awaiting_deposit",
+  "poolId": "rt-9ntzs0",
+  "inSymbol": "CBTC",
+  "outSymbol": "HTEST",
+  "amountIn": 0.01,
+  "minOut": 0.95,
+  "depositParty": "oneswap-pool-...::...",
+  "deadline": "2026-07-18T13:00:00.000Z",
+  "amountOut": null,
+  "senderParty": null,
+  "error": null
+}
+```
+</CodeGroup>
+
+**Rate limit:** create is the tightest tier — **1×** the key's per-minute limit.
+
+### Get a swap
+
+```http
+GET /api/sdk/escrow/swap/:id
+```
+
+Returns the [`EscrowSwap`](/reference/types#escrowswap) for the given id. Only returns swaps owned by the calling key's integrator.
+
+<CodeGroup>
+```bash Request
+curl https://api.oneswap.cc/swapv2/api/sdk/escrow/swap/esc_... \
+  -H "x-sdk-key: sk_live_..."
+```
+
+```json Response (returned)
+{
+  "id": "esc_...",
+  "status": "returned",
+  "poolId": "rt-9ntzs0",
+  "inSymbol": "CBTC",
+  "outSymbol": "HTEST",
+  "amountIn": 0.01,
+  "minOut": 0.95,
+  "depositParty": "oneswap-pool-...::...",
+  "deadline": "2026-07-18T13:00:00.000Z",
+  "amountOut": 0.98,
+  "senderParty": "alice::...",
+  "error": null
+}
+```
+</CodeGroup>
+
+**Rate limit:** poll is **4×** the create rate.
+
+---
+
+## API-key management endpoints
+
+These use `Authorization: Bearer <session>` (your account session), **not** `x-sdk-key`. Developers create keys self-serve from their OneSwap account.
+
+### Create a key
+
+```http
+POST /api/account/sdk-keys
+```
+
+<ParamField body="label" type="string">
+  Optional human-readable label for the key.
+</ParamField>
+
+Returns the new key. The `key` field is the plaintext `sk_live_...`, shown **once**.
+
+<CodeGroup>
+```bash Request
+curl -X POST https://api.oneswap.cc/swapv2/api/account/sdk-keys \
+  -H "Authorization: Bearer <session>" \
+  -H "Content-Type: application/json" \
+  -d '{ "label": "production backend" }'
+```
+
+```json Response
+{
+  "id": "key_...",
+  "key": "sk_live_...",
+  "label": "production backend"
+}
+```
+</CodeGroup>
+
+### List keys
+
+```http
+GET /api/account/sdk-keys
+```
+
+Returns key metadata. The secret is never returned again.
+
+<CodeGroup>
+```bash Request
+curl https://api.oneswap.cc/swapv2/api/account/sdk-keys \
+  -H "Authorization: Bearer <session>"
+```
+
+```json Response
+{
+  "keys": [
+    {
+      "id": "key_...",
+      "label": "production backend",
+      "active": true,
+      "ratePerMin": 60,
+      "createdAt": "2026-07-18T12:00:00.000Z"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+### Revoke a key
+
+```http
+DELETE /api/account/sdk-keys/:id
+```
+
+<CodeGroup>
+```bash Request
+curl -X DELETE https://api.oneswap.cc/swapv2/api/account/sdk-keys/key_... \
+  -H "Authorization: Bearer <session>"
+```
+
+```json Response
+{ "ok": true }
+```
+</CodeGroup>
+
+---
+
+## Status codes
+
+| Code | Meaning |
+|---|---|
+| `200` | Success |
+| `400` | Bad request — e.g. `no pool for IN/OUT`, or a `userRef` that already has an open swap |
+| `401` | Invalid or missing `x-sdk-key` (escrow) or session (key management) |
+| `404` | Swap not found, or not owned by the calling integrator |
+| `429` | Rate limit exceeded — back off and retry |
+
+## Rate limits
+
+| Operation | Limit |
+|---|---|
+| `POST /api/sdk/escrow/swap` | The tightest tier — 1× the key's per-minute limit |
+| `GET /api/sdk/escrow/swap/:id` | 4× the create rate |

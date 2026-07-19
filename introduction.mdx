@@ -1,92 +1,83 @@
 ---
-title: Introduction
-description: Add direct-party token swaps to your app with a few lines of code.
+title: "Introduction"
+description: "Embed atomic token swaps for your fund-transfer-only users with the OneSwap SDK."
 ---
 
 # OneSwap SDK
 
-OneSwap lets you add token swaps to any app on the Canton Network.
+OneSwap is an atomic delivery-versus-payment (DvP) DEX on the **Canton Network**. The SDK lets you embed token swaps into your own app for your end-users.
+
+Today the SDK exposes exactly one capability: **escrow swaps**.
 
 ```typescript
 import { OneSwap } from '@oneswap/sdk'
 
-const apiKey = 'os_live_...'
-const partyId = 'alice::12205a8c...'
+const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 
-const authClient = new OneSwap({ apiKey })
-const challenge = await authClient.walletAuth.requestChallenge(partyId)
-const signature = await wallet.signMessage(challenge.message)
-
-const verified = await authClient.walletAuth.verifyChallenge({
-  partyId,
-  nonce: challenge.nonce,
-  signature,
-  publicKey: wallet.publicKey,
+// 1. Create an escrow swap for your end-user
+const swap = await oneswap.escrow.createSwap({
+  userRef: 'user-1042',
+  inSymbol: 'CBTC',
+  amountIn: 0.01,
+  outSymbol: 'HTEST',
 })
 
-const client = new OneSwap({
-  apiKey,
-  walletToken: verified.token,
-})
+// 2. Tell the user to send `amountIn` of `inSymbol` to this Canton party
+console.log(swap.depositParty)
 
-// get a price quote
-const quote = await client.quotes.get({
-  from: 'Amulet',
-  to: 'USDCx',
-  amount: '100',
-  receiverParty: partyId,
-})
-
-// create a swap intent
-const swap = await client.swaps.create({
-  fromToken: 'Amulet',
-  toToken: 'USDCx',
-  amount: '100',
-  walletAddress: partyId,
-})
-
-// wait for it to complete
-const result = await swap.wait()
-console.log(`Received ${result.actualOutput} ${result.outputToken}`)
+// 3. Wait for OneSwap to detect the deposit, swap, and return the output
+const done = await oneswap.escrow.waitForSwap(swap.id)
+if (done.status === 'returned') {
+  console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
+}
 ```
 
-In SDK params and responses, use `Amulet` when you mean `CC (Amulet)`.
+## What escrow swaps are
+
+Escrow swaps are built for integrators who want to offer token swaps to end-users whose wallets **can only make a plain fund transfer** — they cannot sign a Canton DvP transaction themselves.
+
+Instead of asking the user to co-sign anything, you hand them a Canton party id to send funds to. OneSwap detects the deposit, performs the swap custodially and atomically, and returns the output token **to the party that funded the swap** (return-to-sender).
+
+## How it works
+
+1. Your backend calls `createSwap` and gets back a per-user `depositParty` (a Canton party id) and a `deadline`.
+2. You tell your end-user to send `amountIn` of `inSymbol` to `depositParty`.
+3. OneSwap detects the deposit, performs the atomic swap, and returns the output token to the **depositing** party.
+4. You poll `getSwap` (or await `waitForSwap`) until the swap reaches a terminal status.
+
+Because the swap is atomic DvP, it either completes and returns the output token or the input is refunded — funds are never left stranded by a partial swap.
+
+## Who it's for
+
+- Apps and wallets whose users can transfer tokens but cannot sign a Canton DvP transaction.
+- Integrators who want a swap embedded in their product without building settlement logic.
+- Any backend that can call an HTTP API and hold a stable id for each of its users.
+
+<Note>
+  **Availability.** Escrow settlement is processed by a background monitor that is enabled
+  per-deployment. Escrow swaps are live on OneSwap **devnet** today; **mainnet** access is
+  enabled per integrator — reach out to get provisioned. A swap created against a deployment
+  without the monitor stays in `awaiting_deposit` / `deposit_detected` and never settles.
+</Note>
 
 ## What you get
 
-- **Swap tokens** — `CC (Amulet)`, `USDCx`, and other CIP-56 tokens
-- **Direct-party flow** — users deposit from their own Canton party directly to pool parties
-- **Real-time quotes** — prices, price impact, slippage protection, and network fee estimates
-- **Event-driven** — poll or listen for swap completion
-
-## How swaps work
-
-1. Your app authenticates the developer with an API key
-2. The end user signs a OneSwap challenge with their wallet
-3. OneSwap verifies the signature and returns a short-lived wallet token
-4. You call `client.swaps.create()` with that wallet token attached
-5. OneSwap returns the pool swap party as `depositAddress` plus a `depositReference`
-6. The user sends tokens directly from that same party to the pool party and passes through the reference when the wallet supports Canton reason/reference metadata
-7. OneSwap executes the swap automatically and returns output to the depositor party
-
-That keeps the flow direct-party and non-custodial without trusting a raw `party ID` string from the browser.
-
-Current swap intents remain valid for 24 hours. Respect the returned `expiresAt` instead of assuming a shorter window.
-
-Create your `os_live_...` API key in the wallet-authenticated OneSwap developer portal. SDK developer auth and SDK swap flows do not use site-access tokens or access codes. Legacy `POST /api/sdk/register` and `POST /api/sdk/login` are retired and return `410 Gone`.
-
-Developer portal entry points:
-
-- mainnet: `https://oneswap.cc/developer/keys`
-- devnet: `https://devnet.oneswap.cc/developer/keys`
-
-For devnet integrations, initialize the SDK with `environment: 'devnet'`.
+- **Escrow swaps** — create a swap, hand the user a deposit party, poll to completion.
+- **Return-to-sender** — output is always paid back to the party that funded the swap.
+- **Atomic DvP** — the swap completes and returns output, or the input is refunded.
+- **No gas for your users** — the per-swap network fee is taken from the input token, so the end-user's wallet needs no CC.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="bolt" href="/quickstart">
-    Install, configure, and run your first swap
+    Install, mint a key, and run your first escrow swap
   </Card>
-  <Card title="SDK Methods" icon="code" href="/reference/sdk-methods">
+  <Card title="Escrow swaps guide" icon="arrow-right-arrow-left" href="/guides/escrow-swaps">
+    The full lifecycle, tolerances, and reconciliation
+  </Card>
+  <Card title="SDK methods" icon="code" href="/reference/sdk-methods">
     Every method and parameter
+  </Card>
+  <Card title="REST API" icon="server" href="/reference/rest-api">
+    Raw HTTP for non-JS integrators
   </Card>
 </CardGroup>

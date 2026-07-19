@@ -1,0 +1,164 @@
+---
+title: "Escrow swaps"
+description: "The full escrow swap lifecycle: deposit parties, tolerances, return-to-sender, and reconciliation."
+---
+
+Escrow swaps let you offer token swaps to end-users who can only make a **plain fund transfer** — their wallet cannot sign a Canton DvP transaction. You create a swap, hand the user a Canton party to fund, and OneSwap does the rest custodially and atomically, returning the output token to the party that funded the swap.
+
+## Lifecycle
+
+<Steps>
+  <Step title="Create the swap">
+    Call `createSwap` with your stable `userRef`, the input token and amount, and the output token.
+    OneSwap resolves the `{ inSymbol, outSymbol }` pair to a visible pool and returns an
+    `EscrowSwap` in status `awaiting_deposit` with a per-user `depositParty` and a `deadline`.
+
+    ```typescript
+    const swap = await oneswap.escrow.createSwap({
+      userRef: 'user-1042',
+      inSymbol: 'CBTC',
+      amountIn: 0.01,
+      outSymbol: 'HTEST',
+    })
+    ```
+  </Step>
+
+  <Step title="The user funds the deposit party">
+    Tell your end-user to send **`amountIn` of `inSymbol`** to `swap.depositParty` before
+    `swap.deadline`. This is a normal token transfer — the user's wallet never signs a swap.
+  </Step>
+
+  <Step title="OneSwap detects and swaps">
+    Once the deposit lands on-ledger, the swap moves to `deposit_detected`, then `swapping`
+    while the atomic swap executes.
+  </Step>
+
+  <Step title="Output is returned to sender">
+    On success the swap reaches `returned`: `amountOut` of `outSymbol` is sent back to
+    `senderParty` — the exact party that funded the deposit.
+  </Step>
+</Steps>
+
+## Status reference
+
+Terminal statuses are `returned`, `refunded`, `expired`, and `failed`.
+
+| Status | Meaning |
+|---|---|
+| `awaiting_deposit` | Created; waiting for the end-user's deposit to `depositParty`. |
+| `deposit_detected` | The deposit has been seen on-ledger. |
+| `swapping` | The atomic swap is in progress. |
+| `returned` | **Success.** `amountOut` of `outSymbol` was sent back to `senderParty`. |
+| `refunded` | The deposit was returned to the sender (deposit amount outside tolerance, or output below `minOut`). |
+| `expired` | No deposit arrived before `deadline`; nothing happened. |
+| `failed` | An unexpected error (rare); `error` is set. |
+
+## Deposit-amount tolerance
+
+The deposit must be within **1%** of `amountIn`. If the amount that arrives is outside that band, the swap is **refunded** — OneSwap never guesses intent from a wrong amount. Show your users the exact `amountIn` and `inSymbol` and make it easy to send precisely that.
+
+## Deposit deadline
+
+Every swap has a **60-minute** deposit window from creation, exposed as `deadline` (an ISO timestamp). If no deposit arrives before then, the swap becomes `expired` and nothing happens — the user was never charged. Surface the countdown to your user and create a fresh swap if they miss the window.
+
+## Slippage and minimum output
+
+By default OneSwap applies **2% (200 bps)** slippage tolerance. You can override it per swap:
+
+- `slippageBps` — set a different tolerance in basis points (e.g. `100` for 1%).
+- `minOut` — set a hard floor on the output amount. If the swap would return less than `minOut` of `outSymbol`, it is **refunded** instead.
+
+```typescript
+const swap = await oneswap.escrow.createSwap({
+  userRef: 'user-1042',
+  inSymbol: 'CBTC',
+  amountIn: 0.01,
+  outSymbol: 'HTEST',
+  minOut: 0.95,       // refund rather than return less than this
+  slippageBps: 100,   // 1% tolerance instead of the 2% default
+})
+```
+
+## Return-to-sender semantics
+
+The output is always paid back to the party that **funded** the deposit, reported as `senderParty` on the returned swap. You do not supply a destination address — there isn't one to get wrong. This is what makes escrow swaps safe for fund-transfer-only wallets: the user gets their output at the same party they sent from.
+
+## One open swap per user
+
+At most **one open (non-terminal) escrow swap per `userRef`** may exist at a time. If you call `createSwap` for a `userRef` that already has an open swap, the call errors:
+
+> this user already has an open swap; finish or let it expire first
+
+Wait for the existing swap to reach a terminal status, or let it `expire`, before creating another for the same user. See [Error handling](/guides/error-handling) for how to detect and recover from this.
+
+## Network fee comes from the input
+
+A per-swap network fee is taken **from the input token** to cover the on-chain settlement cost. It is priced **live for every swap** — the measured cost of settling the swap on Canton (the swap's traffic size × the network's current price per MB, plus a small buffer), converted into the input token — so it tracks the real cost rather than a fixed amount (typically around **$1.5–2** at recent network prices, and it moves with the network). Your end-user's wallet needs no CC or gas of any kind — they only ever send the input token. Account for this when you quote amounts to your users: the output reflects the input minus this network fee and the pool's 0.30% swap fee.
+
+## Atomic settlement
+
+Escrow swaps are atomic DvP. The swap either **completes and returns the output token**, or the **input is refunded** — funds are never stranded by a partial swap. That means every swap you create ends in a clean terminal state you can act on.
+
+## Reconciling on your side
+
+Use your own `userRef` as the reconciliation key:
+
+- Store the returned `swap.id` (an `esc_...` id) against your `userRef` when you create a swap.
+- One open swap per `userRef` means there is never ambiguity about which swap a user's deposit belongs to.
+- On terminal status, record the outcome: `returned` (with `amountOut`), `refunded`, `expired`, or `failed` (with `error`).
+
+## Polling for status
+
+Poll `getSwap` on your own cadence:
+
+```typescript
+const swap = await oneswap.escrow.createSwap({
+  userRef: 'user-1042',
+  inSymbol: 'CBTC',
+  amountIn: 0.01,
+  outSymbol: 'HTEST',
+})
+
+const terminal = new Set(['returned', 'refunded', 'expired', 'failed'])
+
+let current = await oneswap.escrow.getSwap(swap.id)
+while (!terminal.has(current.status)) {
+  await new Promise((r) => setTimeout(r, 3000))
+  current = await oneswap.escrow.getSwap(swap.id)
+}
+
+console.log('Final status:', current.status)
+```
+
+## Awaiting completion
+
+`waitForSwap` wraps the polling loop for you and resolves on the first terminal status (or on timeout):
+
+```typescript
+const done = await oneswap.escrow.waitForSwap(swap.id, {
+  pollMs: 3000,       // poll interval (default 3000)
+  timeoutMs: 900000,  // give up after 15 min (default 900000)
+})
+
+switch (done.status) {
+  case 'returned':
+    console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
+    break
+  case 'refunded':
+    console.log('Refunded — amount out of tolerance, or below minOut')
+    break
+  case 'expired':
+    console.log('No deposit arrived before the deadline')
+    break
+  case 'failed':
+    console.log('Unexpected failure:', done.error)
+    break
+}
+```
+
+<Note>
+  Escrow settlement is processed by a background monitor that is enabled per-deployment. Escrow
+  swaps are live on OneSwap **devnet** today; **mainnet** access is enabled per integrator —
+  reach out to get provisioned. Against a deployment without the monitor, a swap stays in
+  `awaiting_deposit` / `deposit_detected` and never settles.
+</Note>

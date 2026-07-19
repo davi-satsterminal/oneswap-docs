@@ -1,372 +1,91 @@
 ---
-title: Types
-description: TypeScript interfaces exported by the SDK.
+title: "Types"
+description: "TypeScript shapes used by the escrow SDK."
 ---
 
-## Client config
+## Client options
+
+Options passed to the `OneSwap` constructor.
 
 ```typescript
-interface OneSwapConfig {
-  apiKey: string
-  environment?: 'mainnet' | 'devnet'
-  baseUrl?: string
-  timeout?: number
-  walletToken?: string | (() => string | Promise<string | undefined> | undefined)
+interface OneSwapOptions {
+  apiKey: string                          // 'sk_live_...' — sent as the x-sdk-key header
+  environment?: 'mainnet' | 'devnet'      // default 'mainnet'; the SDK resolves the URL itself
+  timeout?: number                        // per-request timeout in ms (default 30000)
 }
 ```
 
-Pass `Amulet` in SDK params when you mean `CC (Amulet)`.
+## `createSwap` args
 
-## Quote
+The argument to `oneswap.escrow.createSwap`.
 
 ```typescript
-interface QuoteParams {
-  from: string
-  to: string
-  amount: string
-  receiverParty?: string
-  poolId?: string
-  fromAdmin?: string
-  toAdmin?: string
-}
-
-interface TrafficCostEstimate {
-  bytes: number
-  usd: string
-  cc: string
-  extraTrafficPricePerMb: string
-  amuletPrice: string
-}
-
-interface Quote {
-  inputToken: string
-  inputTokenAdmin: string
-  outputToken: string
-  outputTokenAdmin: string
-  inputAmount: string             // exact deposit amount entered by the user
-  totalInputAmount?: string       // exact deposit amount to send; currently matches inputAmount
-  outputAmount: string            // quoted from inputAmountAfterPoolFee
-  rate: string
-  effectivePrice?: string
-  priceImpact: string
-  fee: number                     // swap fee rate, e.g. 0.003 for 0.3%
-  poolFeeAmount?: string          // absolute 0.3% swap fee deducted before AMM pricing
-  lpFeeAmount?: string
-  platformFeeAmount?: string
-  inputAmountAfterPoolFee?: string
-  networkFeeAmount?: string       // estimated network fee deducted internally from the deposit
-  poolId: string
-  expiresIn: number               // seconds
-  maxPriceImpact?: number         // server-enforced cap (e.g. 15)
-  estimatedTrafficCost?: TrafficCostEstimate
-  trafficFeeInInput?: string      // legacy alias of networkFeeAmount
-  networkFeePolicy?: NetworkFeePolicyApplication | null   // present when a network-fee discount applies
-  platformFeePolicy?: PlatformFeePolicyApplication | null // present when a platform-fee discount applies
-  settlementSafety?: SettlementSafetyInfo | null          // null when clear; non-null when a swap this size would be blocked
-}
-
-interface SettlementSafetyInfo {
-  code: string     // machine-readable block reason, e.g. 'output_velocity_exceeded'
-  reason: string   // technical detail (bps/thresholds)
-  message: string  // user-facing sentence
+interface CreateEscrowSwapArgs {
+  userRef: string      // your stable id for the end-user (one open swap per userRef at a time)
+  inSymbol: string     // token the user deposits, e.g. 'CBTC'
+  amountIn: number     // decimal amount of inSymbol to swap
+  outSymbol: string    // token to return to the user, e.g. 'HTEST'
+  minOut?: number      // optional hard floor on output; below it the swap is refunded
+  slippageBps?: number // optional; default 200 (2%)
 }
 ```
 
-`inputAmount` is the exact deposit amount you want the user to send. OneSwap deducts the estimated network fee internally from that deposit, then deducts the 0.3% pool fee from the remainder before pricing the output. `totalInputAmount` currently echoes that exact deposit amount, and `outputAmount` is priced from `inputAmountAfterPoolFee`.
+## `waitForSwap` options
 
-`settlementSafety` is `null` when the swap is clear to proceed. A non-null `SettlementSafetyInfo` means a swap of this size/timing would be blocked at settlement by the pre-payout safety guard — inspect it before calling `swaps.create`, which would otherwise return `400` and throw `SettlementSafetyError`.
-
-## Fee discounts
-
-A swap can receive a fee discount targeted at the trader's **SDK API key**, their **wallet party**, or the **pool** itself. When more than one applies, the one most favorable to the trader wins ("best for trader"). The discount is already reflected in the charged amount fields (`networkFeeAmount`, `platformFeeAmount`, `poolFeeAmount`), and the applied policy is returned in `networkFeePolicy` / `platformFeePolicy` — each is `null` when no discount applies. The same fields appear on [`SwapIntentResponse`](#swap).
+The optional second argument to `oneswap.escrow.waitForSwap`.
 
 ```typescript
-interface NetworkFeePolicyApplication {
-  policyId: string
-  targetType: 'sdk_api_key' | 'wallet_party' | 'pool' // who the discount is attached to
-  targetId: string
-  mode: 'cap' | 'percentage'
-  maxFeeCc: string | null              // cap mode: max network fee, in CC
-  chargeBps: number | null             // percentage mode: bps of the fee charged (7000 = pay 70%)
-  estimatedNetworkFeeCc: string        // full network fee (CC), before discount
-  chargedNetworkFeeCc: string          // network fee charged (CC), after discount
-  estimatedNetworkFeeAmount: string    // full network fee, in the input token
-  chargedNetworkFeeAmount: string      // network fee charged, in the input token
-}
-
-interface PlatformFeePolicyApplication {
-  policyId: string
-  targetType: 'sdk_api_key' | 'wallet_party' | 'pool'
-  targetId: string
-  mode: 'cap' | 'percentage'
-  maxFeeBps: number | null             // cap mode: max platform fee, in bps
-  chargeBps: number | null             // percentage mode: bps of the fee charged
-  fullPlatformFeeRate: string          // full platform-fee rate, before discount
-  chargedPlatformFeeRate: string       // platform-fee rate charged, after discount
-  discountBps: number                  // discount off the platform fee (3000 = 30% off)
+interface WaitForSwapOptions {
+  pollMs?: number    // default 3000
+  timeoutMs?: number // default 900000 (15 min)
 }
 ```
 
-<Note>
-  The top-level `fee` field is the pool's **nominal** rate and does **not** reflect any
-  discount — read the charged **amount** fields, or the policy snapshots for the
-  before/after. A wallet discount is only resolved in `getQuote` when you pass
-  `receiverParty`; SDK-key and pool discounts always resolve. The bottom line a trader
-  feels is a larger `outputAmount`.
-</Note>
+## `EscrowStatus`
 
-## Pool
+The lifecycle status of a swap. Terminal statuses are `returned`, `refunded`, `expired`, and `failed`.
 
 ```typescript
-interface PoolToken {
-  name: string
-  admin: string
-  reserve: string
-}
-
-interface Pool {
-  id: string
-  tokenA: PoolToken
-  tokenB: PoolToken
-  fee: number
-  lpTokens: string
-}
-
-interface PoolDetail extends Pool {
-  swapAddress: string
-  lpAddress: string
-}
-
-interface PoolListResponse {
-  count: number
-  pools: Pool[]
-}
-
-interface PoolStats {
-  apr: string
-  apy: string
-  volume24h: string
-  fees24h: string
-  lpFees24h: string
-  tvl: string
-  swapCount24h: number
-  aprSupported?: boolean
-  aprQuoteToken?: string | null
-  aprLookbackDays?: number
-}
-
-interface PoolStatsParams {
-  days?: number
-}
-
-interface Token {
-  name: string
-  admin: string
-}
-
-interface TokenListResponse {
-  tokens: Token[]
-}
-
-interface AmbiguousPoolCandidate {
-  poolId: string
-  tokenA: Token
-  tokenB: Token
-}
-
-interface AmbiguousPoolPairResponse {
-  error: string
-  code: 'ambiguous_pool_pair'
-  candidates: AmbiguousPoolCandidate[]
-}
-```
-
-`tokenA.reserve`, `tokenB.reserve`, and `tvl` use effective reserves. Pending platform, developer, and traffic-fee collections are excluded so LP value is not overstated.
-
-`aprSupported` is `false` when OneSwap cannot value both sides of a pool in a shared quote token honestly. Today that mainly affects pools without a stable-quoted side.
-
-## Swap
-
-```typescript
-type SwapStatus =
-  | 'pending'
-  | 'matched'
-  | 'deposit_received'
-  | 'forwarded'
-  | 'processing'
-  | 'sending_output'
-  | 'completed'
-  | 'slippage_failed'
-  | 'price_impact_exceeded'
-  | 'insufficient_liquidity'
-  | 'insufficient_amount'
-  | 'output_failed'
-  | 'no_output_holdings'
-  | 'failed'
-  | 'refund_failed'
+type EscrowStatus =
+  | 'awaiting_deposit'
+  | 'deposit_detected'
+  | 'swapping'
+  | 'returned'
+  | 'refunded'
   | 'expired'
-  | 'cancelled'
-
-interface CreateSwapParams {
-  fromToken: string
-  toToken: string
-  amount: string
-  walletAddress?: string
-  slippageTolerance?: number
-  poolId?: string
-  fromAdmin?: string
-  toAdmin?: string
-  idempotencyKey?: string
-  outputAddress?: string
-}
-
-interface SwapIntentResponse {
-  intentId: string
-  poolId: string
-  depositAddress: string
-  swapAddress: string
-  depositReference: string
-  inputToken: string
-  inputTokenAdmin: string
-  outputToken: string
-  outputTokenAdmin: string
-  expectedAmount: string
-  quotedSwapAmount?: string
-  totalInputAmount?: string
-  poolFeeAmount?: string
-  lpFeeAmount?: string
-  platformFeeAmount?: string
-  inputAmountAfterPoolFee?: string
-  networkFeeAmount?: string
-  trafficFeeInInput?: string
-  expectedOutput: string | null
-  minOutput: string | null
-  slippageTolerance: number
-  outputAddress: string | null
-  expiresAt: string
-  instructions: Record<string, string>
-}
-
-interface SwapStatusResponse {
-  intentId: string
-  poolId: string
-  status: SwapStatus
-  inputToken: string
-  outputToken: string
-  expectedAmount: string
-  expectedOutput: string | null
-  actualOutput: string | null
-  minOutput: string | null
-  slippageTolerance: number
-  depositReference: string | null
-  outputAddress: string | null
-  matchedAt: string | null
-  createdAt: string
-  expiresAt: string
-}
-
-interface CancelSwapResponse {
-  success: boolean
-}
+  | 'failed'
 ```
 
-`walletAddress` is optional in `CreateSwapParams`, but if you send it, it must match the wallet token supplied in `OneSwapConfig.walletToken`.
+## `EscrowSwap`
 
-`outputAddress` is deprecated in `CreateSwapParams`. Current OneSwap execution resolves swap output back to the same party that made the deposit.
-
-`depositReference` is recommended when your wallet flow supports Canton reason/reference metadata. Standard 1-step sender attribution does not depend on it.
-
-In `SwapIntentResponse`, `expectedAmount` is the final deposit amount to send. `quotedSwapAmount` is the original deposit amount you entered, and in the current flow it matches `expectedAmount`. `networkFeeAmount` is the estimated network fee deducted internally from that deposit before AMM pricing, and `inputAmountAfterPoolFee` is the amount that actually trades into the pool.
-
-## Wallet auth
+Returned by `createSwap`, `getSwap`, and `waitForSwap`.
 
 ```typescript
-interface WalletChallengeResponse {
-  partyId: string
-  nonce: string
-  message: string
-  expiresIn: number
-}
-
-interface VerifyWalletChallengeParams {
-  partyId: string
-  nonce: string
-  signature: string
-  publicKey: string
-}
-
-interface VerifyWalletChallengeResponse {
-  partyId: string
-  token: string
-}
-```
-
-## Track
-
-```typescript
-interface TrackResponse {
-  partyId: string
-  swaps: TrackSwapItem[]
-}
-
-// Track swap items — a subset of SwapStatusResponse
-interface TrackSwapItem {
-  intentId: string
+interface EscrowSwap {
+  id: string                    // 'esc_...'
+  status: EscrowStatus
   poolId: string
-  status: SwapStatus
-  inputToken: string
-  outputToken: string
-  expectedAmount: string
-  expectedOutput: string | null
-  actualOutput: string | null
-  matchedAt: string | null
-  createdAt: string
-  expiresAt: string
-}
-
-interface WaitOptions {
-  pollInterval?: number
-  timeout?: number
+  inSymbol: string
+  outSymbol: string
+  amountIn: number
+  minOut: number | null
+  depositParty: string          // the Canton party id the end-user must fund
+  deadline: string              // ISO timestamp; deposit must arrive before this
+  amountOut?: number | null     // set once returned
+  senderParty?: string | null   // the party that funded (output is returned here)
+  error?: string | null
 }
 ```
 
-`TrackResponse` is swap-only. Liquidity intents and LP positions are website-only and are not returned by the public SDK.
-
-Developer earnings, collections, and account analytics stay on the wallet-authenticated OneSwap developer portal instead of the public SDK.
-
-## Errors
-
-```typescript
-class OneSwapError extends Error {
-  statusCode: number
-  response: unknown
-}
-
-class AuthError extends OneSwapError {}        // 401
-class ValidationError extends OneSwapError {}  // 400
-class SettlementSafetyError extends ValidationError { // 400 — swaps.create blocked by the settlement safety guard
-  code: string
-  reason: string
-}
-class NotFoundError extends OneSwapError {}    // 404
-class RateLimitError extends OneSwapError {}   // 429
-class ConflictError extends OneSwapError {}    // 409
-class AmbiguousPoolPairError extends ConflictError {
-  candidates: AmbiguousPoolPairResponse['candidates']
-}
-class ActiveSwapIntentError extends ConflictError { // 409 — active intent already exists
-  existingIntentId: string | null
-  existingIntentSource?: string
-}
-class SlippageError extends OneSwapError {}    // swap refunded
-class PriceImpactError extends OneSwapError {}  // price impact exceeded server cap
-class InsufficientLiquidityError extends OneSwapError {}
-class InsufficientAmountError extends OneSwapError {}
-class OutputFailedError extends OneSwapError {}
-class SwapFailedError extends OneSwapError {}
-class RefundFailedError extends OneSwapError {}
-class ExpiredError extends OneSwapError {}     // backend marked the intent expired or cancelled
-class ServerError extends OneSwapError {}      // 500
-class NetworkError extends OneSwapError {}
-class TimeoutError extends OneSwapError {}     // client-side request timeout or wait() polling deadline
-```
+| Field | Notes |
+|---|---|
+| `id` | Swap id, `esc_...`. Store it against your `userRef`. |
+| `status` | See [`EscrowStatus`](#escrowstatus) and the [status reference](/guides/escrow-swaps#status-reference). |
+| `poolId` | The pool the `{ inSymbol, outSymbol }` pair resolved to. |
+| `amountIn` | The amount the user must deposit — within **1%** tolerance. |
+| `minOut` | The hard output floor, or `null` if none was set. |
+| `depositParty` | The Canton party id the end-user sends `amountIn` of `inSymbol` to. |
+| `deadline` | ISO timestamp, 60 minutes from creation. Deposit before this or the swap expires. |
+| `amountOut` | The returned amount of `outSymbol`; set once `status` is `returned`. |
+| `senderParty` | The party that funded the deposit; the output is returned here. |
+| `error` | Set when `status` is `failed`. |

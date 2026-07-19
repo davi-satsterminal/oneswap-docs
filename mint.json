@@ -15,15 +15,6 @@
   ],
   "navigation": [
     {
-      "group": "Platform",
-      "pages": [
-        "platform/overview",
-        "platform/swapping",
-        "platform/liquidity",
-        "platform/earning"
-      ]
-    },
-    {
       "group": "Getting Started",
       "pages": [
         "introduction",
@@ -33,10 +24,8 @@
     {
       "group": "Guides",
       "pages": [
-        "guides/swaps",
-        "guides/wallets",
-        "guides/liquidity",
-        "guides/fee-earnings",
+        "guides/escrow-swaps",
+        "guides/api-keys",
         "guides/error-handling"
       ]
     },
@@ -44,6 +33,7 @@
       "group": "Reference",
       "pages": [
         "reference/sdk-methods",
+        "reference/rest-api",
         "reference/types"
       ]
     }
