@@ -1,154 +1,138 @@
 ---
-title: Error handling
-description: Handle SDK errors gracefully.
+title: "Error handling"
+description: "How escrow swaps fail, and how to handle it safely."
 ---
 
-## Error classes
+Escrow failures come in two shapes:
 
-Every error thrown by the SDK is an instance of `OneSwapError`:
+1. **Thrown errors** — the SDK throws a plain `Error` whose `message` is the server message. These happen at call time (`createSwap`, `getSwap`, `waitForSwap`) — for example a bad pair, an already-open swap, an invalid key, or a rate limit.
+2. **Terminal statuses** — the swap is created successfully but ends in a non-success terminal state (`refunded`, `expired`, `failed`). You read these off the swap's `status`, not from a thrown error.
 
-```typescript
-import {
-  ConflictError,    // 409 — active intent or other request conflict
-  ActiveSwapIntentError, // 409 — active swap intent already exists (exposes existingIntentId)
-  AmbiguousPoolPairError, // 409 — token pair maps to multiple pools
-  AuthError,        // 401 — invalid or missing API key or wallet token
-  ValidationError,  // 400 — bad parameters
-  SettlementSafetyError, // 400 — swaps.create blocked by the pre-payout safety guard (exposes code/reason)
-  NotFoundError,    // 404 — pool/intent/party not found
-  RateLimitError,   // 429 — too many requests
-  SlippageError,    // swap output below minimum
-  PriceImpactError, // created swap later hit price_impact_exceeded during wait()
-  InsufficientLiquidityError, // swap refunded because the pool was too thin
-  InsufficientAmountError, // swap refunded because the deposit was below required network cost
-  OutputFailedError,// swap output transfer failed
-  SwapFailedError,  // generic terminal swap failure
-  RefundFailedError,// swap refund failed
-  ExpiredError,     // backend marked the intent expired or cancelled
-  NetworkError,     // transport-level failure before an HTTP response
-  TimeoutError,     // client-side request timeout or wait() polling deadline
-  ServerError       // 500 — something went wrong on our end
-} from '@oneswap/sdk'
-```
+Because escrow swaps are **atomic DvP**, a swap that does not complete has its input **refunded** — funds are never stranded by a partial swap.
 
-## Handling swap errors
+## Thrown errors
+
+The SDK throws a standard `Error`. Inspect `err.message` for the server's message:
 
 ```typescript
 try {
-  const swap = await client.swaps.create({ ... })
-  const result = await swap.wait()
+  const swap = await oneswap.escrow.createSwap({
+    userRef: 'user-1042',
+    inSymbol: 'CBTC',
+    amountIn: 0.01,
+    outSymbol: 'HTEST',
+  })
 } catch (err) {
-  if (err instanceof SlippageError) {
-    console.log('Swap refunded due to slippage')
-  } else if (err instanceof PriceImpactError) {
-    console.log('Swap rejected — price impact exceeds the maximum allowed')
-  } else if (err instanceof InsufficientLiquidityError) {
-    console.log('Swap refunded due to insufficient liquidity')
-  } else if (err instanceof InsufficientAmountError) {
-    console.log('Swap refunded because the input amount was too small')
-  } else if (err instanceof OutputFailedError) {
-    console.log('Swap payout failed — inspect the terminal intent status')
-  } else if (err instanceof RefundFailedError) {
-    console.log('Swap refund failed — manual intervention is required')
-  } else if (err instanceof SwapFailedError) {
-    console.log('Swap failed — inspect the intent before retrying')
-  } else if (err instanceof ExpiredError) {
-    console.log('Backend marked the intent expired or cancelled')
-  } else if (err instanceof AmbiguousPoolPairError) {
-    console.log(err.candidates)
-  } else if (err instanceof ActiveSwapIntentError) {
-    // An active intent already exists — resume it instead of creating a duplicate
-    const status = await client.swaps.getStatus(err.existingIntentId)
-  } else if (err instanceof ConflictError) {
-    console.log(err.message)
-  } else if (err instanceof AuthError) {
-    console.log('Check your API key and repeat wallet authentication if needed')
-  } else if (err instanceof SettlementSafetyError) {
-    // swaps.create was blocked by the pre-payout safety guard before any deposit.
-    // No intent was created. Reduce the swap size or wait a few minutes, then retry.
-    console.log(err.message, err.code, err.reason)
-  } else if (err instanceof ValidationError) {
-    console.log(err.message)
-  } else if (err instanceof TimeoutError) {
-    // Client-side deadline (one request, or the wait() polling loop).
-    // The swap may still be settling — resume with client.swaps.getStatus(id).
-    console.log('Client timed out; the swap may still be settling')
-  } else if (err instanceof NetworkError) {
-    console.log(err.message)
-  }
+  console.log((err as Error).message)
 }
 ```
 
-Check `ActiveSwapIntentError` **before** `ConflictError` — it is a subclass, so the generic `ConflictError` branch would otherwise swallow it. It exposes `existingIntentId` and `existingIntentSource` so you can resume or cancel the existing intent rather than parsing the raw response.
+| Message / condition | HTTP | When | What to do |
+|---|---|---|---|
+| `this user already has an open swap; finish or let it expire first` | — | You called `createSwap` for a `userRef` that already has an open (non-terminal) swap | Resume the existing swap, or wait for it to reach a terminal status / expire before creating another |
+| `no pool for IN/OUT` | — | `{ inSymbol, outSymbol }` does not match a visible pool | Fix the symbols, or pick a pair that has a live pool |
+| Invalid / missing `x-sdk-key` | `401` | The API key is missing, malformed, or revoked | Check the key and mint a new one if needed |
+| Rate limit exceeded | `429` | Too many requests for the key's per-minute tier | Back off and retry (see below) |
 
-`PriceImpactError` is raised by `swap.wait()` after a created intent reaches terminal status `price_impact_exceeded`. Quote-time or create-time price-impact rejections are plain `ValidationError` responses because the API returns HTTP `400`.
+## Terminal statuses
 
-## Settlement safety guard
+A created swap always reaches one of these terminal statuses. Read `status` (and `amountOut` / `senderParty` / `error`) off the swap:
 
-`swaps.create` runs a pre-payout safety guard. When a swap of this size or timing would be blocked at settlement, the API returns HTTP `400`, the SDK throws `SettlementSafetyError`, and **no intent is created — no deposit happens**. `SettlementSafetyError` is a subclass of `ValidationError`, so check it **before** the generic `ValidationError` branch.
-
-```typescript
-try {
-  const swap = await client.swaps.create({ ... })
-} catch (err) {
-  if (err instanceof SettlementSafetyError) {
-    // No intent was created. Reduce the swap size or wait a few minutes, then retry.
-    console.log(err.message)        // user-facing sentence
-    console.log(err.code)           // e.g. 'output_velocity_exceeded'
-    console.log(err.reason)         // technical detail (bps/thresholds)
-  }
-}
-```
-
-To avoid hitting this on create, inspect `quote.settlementSafety` first — it is `null` when the swap is clear to proceed, and carries the same `{ code, reason, message }` when a swap that size would be blocked.
-
-## Error properties
-
-All errors have:
-
-```typescript
-err.message    // human-readable description
-err.statusCode // HTTP status (0 for lifecycle or transport errors)
-err.response   // raw response body from the API
-```
-
-`AmbiguousPoolPairError` also exposes `err.candidates`, which lists the matching pools and token admins you can use to retry with `poolId`, `fromAdmin`, or `toAdmin`.
-
-`SettlementSafetyError` also exposes `err.code` (the machine-readable block reason) and `err.reason` (the technical detail), in addition to the user-facing `err.message`.
-
-## Common scenarios
-
-| Error | When | What to do |
+| Status | Meaning | What to do |
 |---|---|---|
-| `AmbiguousPoolPairError` | The same token symbols exist under multiple admins | Retry with `poolId` or both token admin fields |
-| `ActiveSwapIntentError` | An active swap intent already exists for this wallet, pool, and input token (subclass of `ConflictError`) | Resume the existing intent via `err.existingIntentId`, or cancel it before creating another |
-| `ConflictError` | Some other request conflict not covered by a more specific subclass | Inspect `err.message` |
-| `AuthError` | API key is wrong, missing, or the wallet token is invalid/expired | Check your key and refresh wallet auth |
-| `ValidationError` | Bad params or preflight validation failed (missing field, invalid amount, token/pool mismatch) | Fix the request |
-| `SettlementSafetyError` (400) | `swaps.create` was blocked by the pre-payout safety guard; no intent was created (subclass of `ValidationError`) | Reduce the swap size or wait a few minutes, then retry. Inspect `err.code`/`err.reason`, or check `quote.settlementSafety` first |
-| `NotFoundError` | Pool or intent doesn't exist | Check the ID |
-| `RateLimitError` | Too many requests | Back off and retry |
-| `SlippageError` | Price moved during swap | Retry with higher tolerance or try again |
-| `PriceImpactError` | An already-created swap later reached terminal status `price_impact_exceeded` during execution | Reduce swap size or add liquidity to the pool before retrying |
-| `InsufficientLiquidityError` | The pool could not fill the swap | Retry later or reduce size |
-| `InsufficientAmountError` | A created swap was refunded because the live network cost exceeded the deposit | Increase the amount and create a new intent |
-| `OutputFailedError` | Output payout failed or the swap party had no output holdings | Inspect the terminal intent status before retrying |
-| `SwapFailedError` | The swap reached a generic terminal failure state | Investigate the intent before retrying |
-| `RefundFailedError` | The refund path failed after a swap error | Manual intervention is required |
-| `ValidationError` (400) | Quote or intent creation failed because price impact already exceeded the server cap | Reduce swap size or add liquidity before retrying |
-| `ValidationError` (400) | Quote or intent creation failed because the amount was below the estimated network cost | Increase the swap amount. The error response includes `minimumAmount`. |
-| `ExpiredError` | The swap intent expired after its current 24-hour deposit window, or `swap.wait()` observed a cancelled intent | Create a new intent if needed |
-| `TimeoutError` | A single SDK request timed out, or `swap.wait()` reached its local polling deadline | The swap may still be settling — resume with `client.swaps.getStatus(intentId)`, or increase `timeout` |
-| `NetworkError` | The request failed before an HTTP response was received | Retry after checking connectivity |
-| `ServerError` | Our problem | Retry after a moment |
+| `returned` | **Success** — `amountOut` of `outSymbol` was returned to `senderParty` | Record the payout |
+| `refunded` | Deposit amount was outside the **1%** tolerance, or output was below `minOut` — the input was returned to the sender | Tell the user; they can try again with the exact amount or a lower `minOut` |
+| `expired` | No deposit arrived before `deadline` (60 minutes) — nothing happened | Create a fresh swap if the user still wants to trade |
+| `failed` | An unexpected error (rare); `error` is set | Inspect `error`; the input is refunded by the atomic guarantee |
 
-## Configuring wait behavior
+## The "already has an open swap" case
+
+Only one open swap per `userRef` is allowed. When you hit this, don't create a duplicate — look up the swap you already have for that user and resume it:
 
 ```typescript
-const result = await swap.wait({
-  pollInterval: 5000,   // check every 5 seconds (default: 3s)
-  timeout: 600000       // give up after 10 minutes (default: 35min)
-})
+async function createOrResume(args) {
+  try {
+    return await oneswap.escrow.createSwap(args)
+  } catch (err) {
+    if ((err as Error).message.includes('already has an open swap')) {
+      // Resume the swap you stored against this userRef instead of creating a new one
+      const existingId = lookupSwapId(args.userRef)
+      return oneswap.escrow.getSwap(existingId)
+    }
+    throw err
+  }
+}
 ```
 
-`wait()` is resilient to transient failures: a poll that fails with `NetworkError`, `TimeoutError`, `ServerError` (5xx), or `RateLimitError` is retried on the next interval rather than aborting the wait. Non-transient errors (`AuthError`, `ValidationError`, etc.) propagate immediately. Reaching `timeout` throws `TimeoutError` — a client-side deadline, not an on-chain expiry.
+Store `swap.id` against your `userRef` at creation so you can always find the open swap again.
+
+## Rate limits
+
+Requests beyond a key's per-minute tier return `429`. Create is the tightest tier (1× the key's per-minute limit); polling is 4× the create rate. Back off and retry:
+
+```typescript
+async function pollWithBackoff(id: string) {
+  let delay = 3000
+  for (;;) {
+    try {
+      return await oneswap.escrow.getSwap(id)
+    } catch (err) {
+      if ((err as Error).message.toLowerCase().includes('rate')) {
+        await new Promise((r) => setTimeout(r, delay))
+        delay = Math.min(delay * 2, 30000)
+        continue
+      }
+      throw err
+    }
+  }
+}
+```
+
+Prefer `waitForSwap` (or a fixed poll interval) over tight polling loops so you stay under the limit.
+
+## A robust create-and-wait pattern
+
+```typescript
+async function runSwap() {
+  let swap
+  try {
+    swap = await oneswap.escrow.createSwap({
+      userRef: 'user-1042',
+      inSymbol: 'CBTC',
+      amountIn: 0.01,
+      outSymbol: 'HTEST',
+    })
+  } catch (err) {
+    // Bad pair, already-open swap, auth, or rate limit — no swap was created.
+    console.error('Could not create swap:', (err as Error).message)
+    return
+  }
+
+  // Show the user where to deposit.
+  console.log(`Send ${swap.amountIn} ${swap.inSymbol} to ${swap.depositParty} before ${swap.deadline}`)
+
+  const done = await oneswap.escrow.waitForSwap(swap.id)
+
+  switch (done.status) {
+    case 'returned':
+      console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
+      break
+    case 'refunded':
+      console.log('Refunded — amount outside tolerance or below minOut. Input returned to sender.')
+      break
+    case 'expired':
+      console.log('No deposit arrived before the deadline. Nothing happened.')
+      break
+    case 'failed':
+      console.log('Unexpected failure:', done.error, '— input is refunded by the atomic guarantee.')
+      break
+  }
+}
+```
+
+<Note>
+  If `waitForSwap` times out while a swap is still non-terminal, the swap may still settle. Resume
+  with `getSwap(id)` rather than treating it as failed. And remember: against a deployment without
+  the escrow monitor enabled, a swap stays in `awaiting_deposit` / `deposit_detected` and never
+  reaches a terminal status.
+</Note>

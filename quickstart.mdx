@@ -1,148 +1,163 @@
 ---
-title: Quickstart
-description: Get swapping in under 5 minutes.
+title: "Quickstart"
+description: "Run your first escrow swap in under 5 minutes."
 ---
 
-## 1. Install
+This walks you through one complete escrow swap: create it, hand your user a deposit party, and wait for the output to be returned to them.
 
-```bash
-npm install @oneswap/sdk
-```
+<Note>
+  Escrow settlement is processed by a background monitor that is enabled per-deployment.
+  Escrow swaps are live on OneSwap **devnet** today; **mainnet** access is enabled per
+  integrator — reach out to get provisioned. Against a deployment without the monitor, a swap
+  stays in `awaiting_deposit` / `deposit_detected` and never settles.
+</Note>
 
-## 2. Get your API key
+<Steps>
+  <Step title="Install the SDK">
+    ```bash
+    npm install @oneswap/sdk
+    ```
+  </Step>
 
-Create your SDK API key from the wallet-authenticated OneSwap developer portal.
+  <Step title="Create an API key">
+    Create an SDK key from your OneSwap account (self-serve). The key looks like
+    `sk_live_` followed by 48 hex characters and is shown **once** at creation — store it
+    somewhere safe. See [API keys](/guides/api-keys) for the full flow.
 
-- `os_live_...` keys identify your integration.
-- Authenticate your Canton wallet, call `POST /api/sdk/wallet-login`, then create keys on `POST /api/sdk/keys`.
-- For mainnet, create the key from `https://oneswap.cc/developer/keys`.
-- For devnet, create the key from `https://devnet.oneswap.cc/developer/keys`.
-- SDK developer auth and SDK swap flows do not use site-access tokens or access codes.
-- Developer earnings, collections, and account analytics stay on the wallet-authenticated developer portal.
-- Legacy `POST /api/sdk/register` and `POST /api/sdk/login` are retired and return `410 Gone`.
+    Keep the key on your **server only**. It is your integrator credential; never ship it to a
+    browser or to an end-user.
+  </Step>
 
-## 3. Initialize
+  <Step title="Initialize the client">
+    ```typescript
+    import { OneSwap } from '@oneswap/sdk'
 
-```typescript
+    const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
+    ```
+
+    The client sends your key on every escrow request as the `x-sdk-key` header. It talks to
+    **mainnet** by default; pass `environment: 'devnet'` to use the devnet backend — the SDK
+    resolves the URL itself, so you never set one:
+
+    ```typescript
+    const oneswap = new OneSwap({
+      apiKey: 'sk_live_...',
+      environment: 'devnet', // 'mainnet' (default) | 'devnet'
+    })
+    ```
+  </Step>
+
+  <Step title="Create the escrow swap">
+    ```typescript
+    const swap = await oneswap.escrow.createSwap({
+      userRef: 'user-1042', // your stable id for this end-user
+      inSymbol: 'CBTC',      // token the user deposits
+      amountIn: 0.01,        // amount of inSymbol to swap
+      outSymbol: 'HTEST',    // token to return to the user
+    })
+
+    console.log(swap.id)           // 'esc_...'
+    console.log(swap.status)       // 'awaiting_deposit'
+    console.log(swap.depositParty) // the Canton party the user must fund
+    console.log(swap.deadline)     // ISO timestamp — deposit before this
+    ```
+
+    Only one open swap is allowed per `userRef` at a time.
+  </Step>
+
+  <Step title="Show the user the deposit party">
+    Tell your end-user to send **`amountIn` of `inSymbol`** (here, `0.01 CBTC`) to
+    `swap.depositParty` before `swap.deadline` (60 minutes from creation).
+
+    The deposit must land within **1%** of `amountIn`, or it is refunded. OneSwap never guesses
+    intent from a wrong amount.
+  </Step>
+
+  <Step title="Wait for completion">
+    ```typescript
+    const done = await oneswap.escrow.waitForSwap(swap.id)
+
+    if (done.status === 'returned') {
+      // Success — output was paid back to the party that funded the swap
+      console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
+    } else {
+      // refunded | expired | failed
+      console.log(`Swap ended as ${done.status}`, done.error)
+    }
+    ```
+
+    `waitForSwap` resolves once the swap reaches a terminal status
+    (`returned`, `refunded`, `expired`, or `failed`), or when its local timeout is hit.
+  </Step>
+</Steps>
+
+## Complete example
+
+<CodeGroup>
+```typescript TypeScript
 import { OneSwap } from '@oneswap/sdk'
 
-const apiKey = 'os_live_...'
-const authClient = new OneSwap({ apiKey })
+const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
+
+async function swapForUser() {
+  // 1. Create the escrow swap
+  const swap = await oneswap.escrow.createSwap({
+    userRef: 'user-1042',
+    inSymbol: 'CBTC',
+    amountIn: 0.01,
+    outSymbol: 'HTEST',
+  })
+
+  // 2. Show your end-user where to send the deposit
+  console.log(`Send ${swap.amountIn} ${swap.inSymbol} to ${swap.depositParty}`)
+  console.log(`Deposit before ${swap.deadline}`)
+
+  // 3. Wait for OneSwap to detect, swap, and return the output
+  const done = await oneswap.escrow.waitForSwap(swap.id)
+
+  if (done.status === 'returned') {
+    console.log(`Done — returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
+  } else {
+    console.log(`Swap ended as ${done.status}`, done.error)
+  }
+}
+
+swapForUser()
 ```
 
-In SDK code, use `Amulet` when you mean `CC (Amulet)`.
+```bash curl
+# 1. Create the escrow swap
+curl -X POST https://api.oneswap.cc/swapv2/api/sdk/escrow/swap \
+  -H "x-sdk-key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userRef": "user-1042",
+    "inSymbol": "CBTC",
+    "amountIn": 0.01,
+    "outSymbol": "HTEST"
+  }'
+# → { "id": "esc_...", "status": "awaiting_deposit", "depositParty": "...", "deadline": "..." }
 
-To target devnet:
-
-```typescript
-const authClient = new OneSwap({
-  apiKey,
-  environment: 'devnet',
-})
+# 2. Poll the swap until it reaches a terminal status
+curl https://api.oneswap.cc/swapv2/api/sdk/escrow/swap/esc_... \
+  -H "x-sdk-key: sk_live_..."
+# → { "id": "esc_...", "status": "returned", "amountOut": 0.98, "senderParty": "...", ... }
 ```
-
-## 4. Verify the user's wallet
-
-Ask the user to sign the OneSwap challenge with the same wallet that will send the deposit.
-
-```typescript
-const partyId = 'alice::12205a8c...'
-
-const challenge = await authClient.walletAuth.requestChallenge(partyId)
-const signature = await wallet.signMessage(challenge.message)
-
-const verified = await authClient.walletAuth.verifyChallenge({
-  partyId,
-  nonce: challenge.nonce,
-  signature,
-  publicKey: wallet.publicKey,
-})
-
-const client = new OneSwap({
-  apiKey,
-  walletToken: verified.token,
-})
-```
-
-If your app stores and refreshes the wallet token in browser state, you can pass `walletToken` as a function instead of a fixed string.
-
-## 5. Get a quote
-
-```typescript
-const quote = await client.quotes.get({
-  from: 'Amulet',
-  to: 'USDCx',
-  amount: '100',
-  receiverParty: partyId,
-})
-
-console.log(quote.outputAmount)
-console.log(quote.rate)
-console.log(quote.priceImpact)
-console.log(quote.inputTokenAdmin)
-console.log(quote.outputTokenAdmin)
-console.log(quote.totalInputAmount)
-console.log(quote.networkFeeAmount)
-console.log(quote.poolFeeAmount)
-console.log(quote.inputAmountAfterPoolFee)
-console.log(quote.estimatedTrafficCost?.cc)
-```
-
-`amount` is the exact deposit amount the user plans to send. OneSwap estimates the payout-leg network fee in the input token, deducts that internally from the deposit, then deducts the 0.3% pool fee from the remainder before pricing the swap. `quote.outputAmount` is calculated from `quote.inputAmountAfterPoolFee`. `quote.totalInputAmount` currently echoes the exact deposit amount to send, and `quote.trafficFeeInInput` remains available as a compatibility alias for `quote.networkFeeAmount`.
-
-If a token symbol exists under multiple admins, pass `poolId` or both token admin fields (`fromAdmin` and `toAdmin`) so OneSwap can resolve the exact pool pair.
-
-## 6. Create a swap intent
-
-```typescript
-const swap = await client.swaps.create({
-  fromToken: 'Amulet',
-  toToken: 'USDCx',
-  amount: '100',
-  walletAddress: partyId,
-})
-
-console.log(swap.depositAddress) // pool swap party
-console.log(swap.depositReference) // pass through when the wallet supports Canton reason/reference metadata
-console.log(swap.quotedSwapAmount) // the original deposit amount you asked OneSwap to process
-console.log(swap.expectedAmount) // final deposit amount to send
-console.log(swap.totalInputAmount) // same as expectedAmount in the current flow
-console.log(swap.networkFeeAmount)
-console.log(swap.poolFeeAmount)
-console.log(swap.inputAmountAfterPoolFee)
-console.log(swap.expectedOutput)
-console.log(swap.expiresAt)
-```
-
-The `walletAddress` field is optional, but if you send it, it must match the authenticated wallet token.
-
-Swap intents currently remain valid for 24 hours. Use `swap.expiresAt` from the response rather than hard-coding the timeout.
-
-## 7. Send the deposit
-
-The user sends `swap.expectedAmount` (same as `swap.totalInputAmount`) from `partyId` directly to `swap.depositAddress` and passes through `swap.depositReference` when the wallet supports Canton reason/reference metadata. Do not send from a different wallet or Canton party, or the swap will not complete.
-
-## 8. Wait for completion
-
-```typescript
-swap.on('processing', () => console.log('Deposit detected'))
-
-const result = await swap.wait()
-console.log(`Done! Got ${result.actualOutput} ${result.outputToken}`)
-```
-
-If slippage is exceeded, the swap is refunded automatically to the depositor party.
+</CodeGroup>
 
 ## What's next
 
 <CardGroup cols={2}>
-  <Card title="Swaps Guide" icon="arrow-right-arrow-left" href="/guides/swaps">
-    Slippage, status polling, and failure states
+  <Card title="Escrow swaps guide" icon="arrow-right-arrow-left" href="/guides/escrow-swaps">
+    Lifecycle, tolerances, min-out, and reconciliation
   </Card>
-  <Card title="Wallet Guide" icon="wallet" href="/guides/wallets">
-    Connect a wallet and manage wallet tokens
+  <Card title="API keys" icon="key" href="/guides/api-keys">
+    Create, rotate, and revoke keys safely
   </Card>
-  <Card title="SDK Methods" icon="code" href="/reference/sdk-methods">
-    Review the swaps-focused SDK surface
+  <Card title="Error handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Refunds, expiries, and robust polling
+  </Card>
+  <Card title="SDK methods" icon="code" href="/reference/sdk-methods">
+    The full escrow client surface
   </Card>
 </CardGroup>

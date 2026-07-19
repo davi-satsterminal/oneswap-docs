@@ -1,184 +1,146 @@
 ---
-title: SDK methods
-description: Every method available in the OneSwap SDK.
+title: "SDK methods"
+description: "The OneSwap client surface for escrow swaps."
 ---
 
-## Setup
+The SDK currently exposes exactly one namespace: `escrow`.
+
+## Constructor
 
 ```typescript
 import { OneSwap } from '@oneswap/sdk'
-const client = new OneSwap({ apiKey: 'os_live_...' })
+
+const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 ```
 
+<ParamField path="apiKey" type="string" required>
+  Your integrator API key (`sk_live_` followed by 48 hex chars). Sent on every escrow request as
+  the `x-sdk-key` header. Keep it server-side only.
+</ParamField>
+
+<ParamField path="environment" type="'mainnet' | 'devnet'" default="mainnet">
+  Which OneSwap backend to use. The SDK resolves the URL itself — `mainnet`
+  (`https://api.oneswap.cc/swapv2`) or `devnet` (`https://devnet.api.oneswap.cc/swapv2`). You never
+  pass a raw URL.
+</ParamField>
+
+<ParamField path="timeout" type="number" default="30000">
+  Per-request timeout in milliseconds.
+</ParamField>
+
 ```typescript
-const devnetClient = new OneSwap({
-  apiKey: 'os_live_...',
+// Point at devnet for integration testing
+const oneswap = new OneSwap({
+  apiKey: 'sk_live_...',
   environment: 'devnet',
 })
 ```
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `apiKey` | `string` | required | Your OneSwap SDK API key (`os_live_...`). |
-| `environment` | `'mainnet' \| 'devnet'` | `'mainnet'` | Logical target environment. `devnet` defaults to `https://devnet.api.oneswap.cc`. |
-| `baseUrl` | `string` | environment default | Override the API origin directly. |
-| `walletToken` | `string \| (() => string \| Promise<string \| undefined> \| undefined)` | none | Optional end-user wallet token, or a lazy getter, for wallet-authenticated SDK calls. |
-| `timeout` | `number` | `30000` | Request timeout in ms |
+## `escrow.createSwap`
 
-Create `apiKey` values through the wallet-authenticated OneSwap developer portal. Authenticate your wallet on `POST /api/sdk/wallet-login`, then create or rotate keys on `POST /api/sdk/keys`. SDK developer auth and SDK swap flows do not use site-access tokens or access codes.
+Create an escrow swap. Returns an [`EscrowSwap`](/reference/types#escrowswap) in status `awaiting_deposit`, carrying the `depositParty` your end-user must fund and the `deadline` they must beat.
 
-Portal entry points:
-
-- Mainnet SDK keys: `https://oneswap.cc/developer/keys`
-- Devnet SDK keys: `https://devnet.oneswap.cc/developer/keys`
-
-In SDK params and responses, use `Amulet` when you mean `CC (Amulet)`.
-
-## Pools
-
-| Method | Description |
-|---|---|
-| `client.pools.list()` | All pools with effective reserves, fee, and LP supply |
-| `client.pools.get(poolId)` | Pool detail with `swapAddress` and `lpAddress` |
-| `client.pools.getStats(poolId, { days? })` | `apr`, `apy`, `volume24h`, `fees24h`, `lpFees24h`, `tvl`, `swapCount24h`, and APR metadata computed from fee events and effective reserves. Default lookback is 7 days. |
-| `client.pools.getTicker(poolId)` | USD-denominated `price`, `priceChange24h`, and `volume24h` for a pool. Live price and volume are derived from effective reserves and fee events (via the canonical CC/USDCx pool); `priceChange24h` comes from hourly USD snapshots and is `null` until ~24h of history exists. |
-
-## Tokens
-
-| Method | Description |
-|---|---|
-| `client.tokens.list()` | Available tokens with `name` and `admin` |
-
-## Quotes
-
-| Method | Description |
-|---|---|
-| `client.quotes.get({ from, to, amount, receiverParty?, poolId?, fromAdmin?, toAdmin? })` | Price quote. `amount` is the exact deposit amount you want the user to send. The response includes `networkFeeAmount`, `poolFeeAmount`, `inputAmountAfterPoolFee`, and `totalInputAmount`. `outputAmount` is based on `inputAmountAfterPoolFee`, while `totalInputAmount` currently echoes the exact deposit amount to send. `trafficFeeInInput` remains as a compatibility alias for `networkFeeAmount`. When token symbols are reused across issuers, pass `poolId` or both admin fields to disambiguate the pool pair. |
-
-Quotes also return `inputTokenAdmin` and `outputTokenAdmin` so you can keep working with the exact instrument identity that was priced.
-
-The quote response also includes a top-level `settlementSafety` field — `null` when the swap is clear to proceed, or `{ code, reason, message }` when a swap of this size/timing would be blocked at settlement. Inspect it before calling `swaps.create`; see [Settlement safety](#settlement-safety).
-
-### Fee discounts
-
-If a fee discount applies — from the SDK API key, the wallet party, or the pool (see [Fee discounts](/reference/types#fee-discounts)) — the charged amount fields already reflect it, and the applied policy is returned in `networkFeePolicy` / `platformFeePolicy` (otherwise `null`). The same quote without and with a pool discount (50% off network, 30% off platform):
-
-<CodeGroup>
-```json No discount
-{
-  "outputAmount": "0.0000277700",
-  "fee": 0.003,
-  "networkFeeAmount": "7.2871950000",
-  "platformFeeAmount": "0.0132846037",
-  "networkFeePolicy": null,
-  "platformFeePolicy": null
-}
+```typescript
+oneswap.escrow.createSwap(args: {
+  userRef: string
+  inSymbol: string
+  amountIn: number
+  outSymbol: string
+  minOut?: number
+  slippageBps?: number
+}): Promise<EscrowSwap>
 ```
 
-```json With discount
-{
-  "outputAmount": "0.0000334890",            // +20.6% more output
-  "fee": 0.003,                              // nominal rate — unchanged
-  "networkFeeAmount": "3.6435975000",        // 50% off
-  "platformFeeAmount": "0.0112121113",
-  "networkFeePolicy": {
-    "targetType": "pool",
-    "chargeBps": 5000,
-    "estimatedNetworkFeeAmount": "7.2871950000",
-    "chargedNetworkFeeAmount": "3.6435975000"
-  },
-  "platformFeePolicy": {
-    "targetType": "pool",
-    "chargeBps": 7000,
-    "fullPlatformFeeRate": "0.0007500000",
-    "chargedPlatformFeeRate": "0.0005250000",
-    "discountBps": 3000
-  }
+<ParamField path="userRef" type="string" required>
+  Your stable id for the end-user. Only one open swap per `userRef` at a time.
+</ParamField>
+
+<ParamField path="inSymbol" type="string" required>
+  The token the user deposits, e.g. `'CBTC'`.
+</ParamField>
+
+<ParamField path="amountIn" type="number" required>
+  Decimal amount of `inSymbol` to swap. The deposit must arrive within **1%** of this amount.
+</ParamField>
+
+<ParamField path="outSymbol" type="string" required>
+  The token to return to the user, e.g. `'HTEST'`.
+</ParamField>
+
+<ParamField path="minOut" type="number">
+  Optional hard floor on the output amount. If the swap would return less than this, it is refunded.
+</ParamField>
+
+<ParamField path="slippageBps" type="number" default="200">
+  Optional slippage tolerance in basis points. Defaults to `200` (2%).
+</ParamField>
+
+```typescript
+const swap = await oneswap.escrow.createSwap({
+  userRef: 'user-1042',
+  inSymbol: 'CBTC',
+  amountIn: 0.01,
+  outSymbol: 'HTEST',
+  minOut: 0.95,
+  slippageBps: 100,
+})
+
+console.log(swap.id)           // 'esc_...'
+console.log(swap.status)       // 'awaiting_deposit'
+console.log(swap.depositParty) // the party the user must fund
+console.log(swap.deadline)     // ISO timestamp
+```
+
+Throws if `{ inSymbol, outSymbol }` has no visible pool (`no pool for IN/OUT`) or if the `userRef` already has an open swap. See [Error handling](/guides/error-handling).
+
+## `escrow.getSwap`
+
+Fetch the current state of a swap by id. Only returns swaps owned by your integrator.
+
+```typescript
+oneswap.escrow.getSwap(id: string): Promise<EscrowSwap>
+```
+
+<ParamField path="id" type="string" required>
+  The swap id returned by `createSwap` (`esc_...`).
+</ParamField>
+
+```typescript
+const swap = await oneswap.escrow.getSwap('esc_...')
+console.log(swap.status)
+```
+
+## `escrow.waitForSwap`
+
+Poll a swap until it reaches a terminal status (`returned`, `refunded`, `expired`, or `failed`), or until the local timeout. Resolves with the final [`EscrowSwap`](/reference/types#escrowswap).
+
+```typescript
+oneswap.escrow.waitForSwap(id: string, opts?: {
+  pollMs?: number
+  timeoutMs?: number
+}): Promise<EscrowSwap>
+```
+
+<ParamField path="id" type="string" required>
+  The swap id to wait on.
+</ParamField>
+
+<ParamField path="opts.pollMs" type="number" default="3000">
+  Poll interval in milliseconds.
+</ParamField>
+
+<ParamField path="opts.timeoutMs" type="number" default="900000">
+  Give up after this many milliseconds (default 15 minutes). On timeout the swap may still be
+  settling — resume with `getSwap(id)`.
+</ParamField>
+
+```typescript
+const done = await oneswap.escrow.waitForSwap('esc_...', {
+  pollMs: 3000,
+  timeoutMs: 900000,
+})
+
+if (done.status === 'returned') {
+  console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
 }
 ```
-</CodeGroup>
-
-The top-level `fee` rate stays nominal regardless of the discount — read the charged amount fields or `discountBps`. A wallet discount only resolves in a quote when you pass `receiverParty`.
-
-## Swaps
-
-| Method | Description |
-|---|---|
-| `client.swaps.create(params)` | Create a wallet-authenticated swap intent. Can throw `SettlementSafetyError` (HTTP `400`) when the pre-payout safety guard blocks the swap — no intent is created. |
-| `client.swaps.getStatus(intentId)` | Poll swap status for the authenticated wallet party |
-| `client.swaps.cancel(intentId)` | Cancel a pending swap intent for the authenticated wallet party |
-
-### Settlement safety
-
-`quotes.get` returns a top-level `settlementSafety` field. It is `null` when the swap is clear, or `{ code, reason, message }` when a swap of this size/timing would be blocked at settlement before any payout. `code` is one of `output_reserve_share_exceeded`, `output_velocity_exceeded`, `reserve_price_deviation_exceeded`, `reference_price_deviation_exceeded`, `incomplete_completed_accounting`, `invalid_output_reserve`, `invalid_execution_price`, or `settlement_safety_guard_unavailable`.
-
-Check it before calling `swaps.create`. If you skip the check and the guard would block, `swaps.create` returns HTTP `400` and the SDK throws [`SettlementSafetyError`](/guides/error-handling#settlement-safety-guard) (which carries the same `code`/`reason`/`message`); no intent is created and no deposit happens.
-
-## Wallet auth
-
-| Method | Description |
-|---|---|
-| `client.walletAuth.requestChallenge(partyId)` | Create a signable OneSwap wallet-auth challenge |
-| `client.walletAuth.verifyChallenge(params)` | Verify the signed challenge and return a wallet token |
-
-### `swaps.create` params
-
-| Param | Required | Description |
-|---|---|---|
-| `fromToken` | yes | Input token |
-| `toToken` | yes | Output token |
-| `amount` | yes | Swap amount to price into the pool. The returned intent tells you the larger total deposit amount after adding the estimated network fee. |
-| `slippageTolerance` | no | `0.001`–`0.05` (0.1%–5%), default `0.05`. Validated client-side; non-finite or out-of-range values throw `ValidationError` before any request is sent. |
-| `walletAddress` | no | Optional sender `party ID` for UI clarity. If present, it must match the authenticated wallet token. |
-| `poolId` | no | Preferred disambiguator when the token pair can map to more than one pool. |
-| `fromAdmin` | no | Exact admin for the input token when token symbols are reused. |
-| `toAdmin` | no | Exact admin for the output token when token symbols are reused. |
-| `idempotencyKey` | no | Client-supplied key forwarded to the backend for safe retries after a lost response. (Server-side dedup on this key is not yet implemented; rely on the active-intent guard for now.) |
-| `outputAddress` | no | Deprecated. Ignored by the SDK client because the current execution flow always pays back to the depositor party. |
-
-### SwapIntent object
-
-Properties: `intentId`, `poolId`, `depositAddress`, `swapAddress`, `depositReference`, `inputToken`, `inputTokenAdmin`, `outputToken`, `outputTokenAdmin`, `expectedAmount`, `quotedSwapAmount`, `totalInputAmount`, `poolFeeAmount`, `lpFeeAmount`, `platformFeeAmount`, `inputAmountAfterPoolFee`, `networkFeeAmount`, `trafficFeeInInput`, `expectedOutput`, `minOutput`, `slippageTolerance`, `outputAddress`, `expiresAt`, `instructions`.
-
-Notes:
-- `depositAddress` is the pool swap party, not the user's own party.
-- `expectedAmount` is the final deposit amount to send. `totalInputAmount` returns the same value explicitly.
-- `quotedSwapAmount` is the original deposit amount you entered. In the current flow it matches `expectedAmount`.
-- `poolFeeAmount` is the 0.3% swap fee deducted before the remaining amount is priced into the pool.
-- `networkFeeAmount` is the estimated network fee deducted internally from the deposit. `trafficFeeInInput` remains as a compatibility alias.
-- `inputAmountAfterPoolFee` is the amount that actually trades into the pool after both deductions.
-- `depositReference` is recommended when your wallet flow supports Canton reason/reference metadata. Sender attribution does not depend on it for standard 1-step transfers.
-- `client.swaps.create(...)` requires both a valid API key and a wallet-authenticated end-user token.
-- The deposit must be sent from the same signed-in wallet party used to create the swap intent.
-- A different wallet or Canton party will not complete the swap intent.
-- Current backend swap intents give you a 24-hour deposit window. Use `expiresAt` from the response instead of hard-coding the timeout.
-- `outputAddress` in the response is the resolved destination party. In the current flow it matches the depositor party.
-
-| Method / Event | Description |
-|---|---|
-| `swap.cancel()` | Cancel a pending swap intent |
-| `swap.wait(opts?)` | Await terminal state |
-| `'matched'` | A matching intent/deposit pair has been claimed |
-| `'deposit_received'` | The input deposit has been attributed to the swap |
-| `'forwarded'` | The swap has moved past deposit handling and into settlement |
-| `'processing'` | Deposit detected, swap executing |
-| `'sending_output'` | OneSwap is sending output back to the depositor party |
-| `'completed'` | Swap done |
-| `'slippage_failed'` | Refunded because price moved |
-| `'price_impact_exceeded'` | Refunded because price impact exceeded the server cap |
-| `'insufficient_amount'` | Refunded because the deposit was too small to cover the required network cost |
-| `'insufficient_liquidity'` | Refunded because pool liquidity is insufficient |
-| `'output_failed'` | Output transfer failed and the input refund succeeded |
-| `'no_output_holdings'` | No output inventory was available on the swap party |
-| `'failed'` | Swap reached a generic terminal failure state |
-| `'refund_failed'` | Refund path failed and manual intervention is required |
-| `'expired'` | Timed out |
-| `'cancelled'` | Intent was cancelled before execution started |
-
-## Track
-
-| Method | Description |
-|---|---|
-| `client.track(partyId)` | Swap intents only for the wallet-authenticated Canton party under your API key. The `partyId` must match the authenticated wallet token. |
-
-Liquidity intents, LP positions, add/remove liquidity flows, developer earnings, collections, and account analytics stay outside the public SDK API.
