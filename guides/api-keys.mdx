@@ -5,6 +5,11 @@ description: "Create, rotate, and revoke the SDK keys that authenticate your req
 
 Every swap request is authenticated with an **integrator API key**. You create and manage keys from your OneSwap account (self-serve), then pass the key to the SDK.
 
+| Network | Create keys at |
+|---|---|
+| Mainnet | [swap.oneswap.cc](https://swap.oneswap.cc) |
+| Devnet | [devnet.oneswap.cc](https://devnet.oneswap.cc) |
+
 ## Key format
 
 A key looks like `sk_live_` followed by **48 hex characters**:
@@ -30,9 +35,11 @@ const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 
 ## Creating a key
 
-Sign in to your OneSwap account and open the **SDK keys** section. Create a key with an
-optional label (e.g. "production backend"). The response shows the plaintext `sk_live_...`
-value **once** — copy it into your server's secret store immediately.
+Sign in to your OneSwap account — [swap.oneswap.cc](https://swap.oneswap.cc) for mainnet,
+[devnet.oneswap.cc](https://devnet.oneswap.cc) for devnet — and open the **SDK keys**
+section. Create a key with an optional label (e.g. "production backend"). The response shows
+the plaintext `sk_live_...` value **once** — copy it into your server's secret store
+immediately.
 
 ## Listing keys
 
