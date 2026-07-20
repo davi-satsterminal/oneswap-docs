@@ -112,7 +112,8 @@ A swap quote. Amounts are numbers denominated in the input/output token.
 interface Quote {
   amountOut: number            // expected output in the `to` token
   priceImpactPct: number       // price impact of this trade size, in percent
-  networkFeeIn: number         // network fee carved from the input token
+  networkFeeIn: number         // network fee taken from the input at QUOTE time (often 0 —
+                               // deposit swaps settle the network fee from the input later)
   swapFeeBps: number           // the pool's configured fee, in basis points
   effFeeBps: number            // effective fee after any discount
   discountBps: number          // discount applied to the platform slice, in bps

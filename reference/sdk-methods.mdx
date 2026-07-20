@@ -198,6 +198,14 @@ console.log(quote.xToY)           // direction within that pool
 
 Throws [`NoDirectPoolError`](/guides/error-handling#the-no-direct-pool-case) when no pool trades the pair (there is no multi-hop routing) and `AmbiguousPoolPairError` (with `candidates`) when several do — retry with `poolId`. The pool list backing symbol resolution is cached for 30 seconds per client instance.
 
+<Note>
+  `networkFeeIn` can be `0` on a quote — the network fee is not always taken from the input at
+  quote time. Deposit swaps (`swaps.createSwap`) DO settle the per-swap network fee from the
+  input token (see [the Swaps guide](/guides/swaps#network-fee-comes-from-the-input)), so the
+  settled output can come in slightly below a quote whose `networkFeeIn` was `0`. Set `minOut`
+  with that headroom in mind.
+</Note>
+
 ## `pools.list`
 
 All pools visible to the caller, with live reserves and fee configuration.
