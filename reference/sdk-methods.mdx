@@ -1,9 +1,9 @@
 ---
 title: "SDK methods"
-description: "The OneSwap client surface for escrow swaps."
+description: "The full OneSwap client surface: swaps, quotes, pools, and tokens."
 ---
 
-The SDK currently exposes exactly one namespace: `escrow`.
+The client exposes four namespaces: `swaps` (execution), `quotes`, `pools`, and `tokens` (market data).
 
 ## Constructor
 
@@ -14,14 +14,12 @@ const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 ```
 
 <ParamField path="apiKey" type="string" required>
-  Your integrator API key (`sk_live_` followed by 48 hex chars). Sent on every escrow request as
+  Your integrator API key (`sk_live_` followed by 48 hex chars). Sent on every request as
   the `x-sdk-key` header. Keep it server-side only.
 </ParamField>
 
 <ParamField path="environment" type="'mainnet' | 'devnet'" default="mainnet">
-  Which OneSwap backend to use. The SDK resolves the URL itself — `mainnet`
-  (`https://api.oneswap.cc/swapv2`) or `devnet` (`https://devnet.api.oneswap.cc/swapv2`). You never
-  pass a raw URL.
+  Which OneSwap backend to use. The SDK resolves the URL itself — you never pass a raw URL.
 </ParamField>
 
 <ParamField path="timeout" type="number" default="30000">
@@ -36,19 +34,19 @@ const oneswap = new OneSwap({
 })
 ```
 
-## `escrow.createSwap`
+## `swaps.createSwap`
 
-Create an escrow swap. Returns an [`EscrowSwap`](/reference/types#escrowswap) in status `awaiting_deposit`, carrying the `depositParty` your end-user must fund and the `deadline` they must beat.
+Create a swap. Returns a [`Swap`](/reference/types#swap) in status `awaiting_deposit`, carrying the `depositParty` your end-user must fund and the `deadline` they must beat.
 
 ```typescript
-oneswap.escrow.createSwap(args: {
+oneswap.swaps.createSwap(args: {
   userRef: string
   inSymbol: string
   amountIn: number
   outSymbol: string
   minOut?: number
   slippageBps?: number
-}): Promise<EscrowSwap>
+}): Promise<Swap>
 ```
 
 <ParamField path="userRef" type="string" required>
@@ -76,7 +74,7 @@ oneswap.escrow.createSwap(args: {
 </ParamField>
 
 ```typescript
-const swap = await oneswap.escrow.createSwap({
+const swap = await oneswap.swaps.createSwap({
   userRef: 'user-1042',
   inSymbol: 'CBTC',
   amountIn: 0.01,
@@ -91,14 +89,19 @@ console.log(swap.depositParty) // the party the user must fund
 console.log(swap.deadline)     // ISO timestamp
 ```
 
-Throws if `{ inSymbol, outSymbol }` has no visible pool (`no pool for IN/OUT`) or if the `userRef` already has an open swap. See [Error handling](/guides/error-handling).
+Throws if `{ inSymbol, outSymbol }` has no visible pool (`no pool for IN/OUT`) or `OpenSwapExistsError` if the `userRef` already has an open swap. See [Error handling](/guides/error-handling).
 
-## `escrow.getSwap`
+<Note>
+  `oneswap.escrow` — the 1.0.0 name for this namespace — still works as a deprecated alias of
+  the same instance.
+</Note>
+
+## `swaps.getSwap`
 
 Fetch the current state of a swap by id. Only returns swaps owned by your integrator.
 
 ```typescript
-oneswap.escrow.getSwap(id: string): Promise<EscrowSwap>
+oneswap.swaps.getSwap(id: string): Promise<Swap>
 ```
 
 <ParamField path="id" type="string" required>
@@ -106,19 +109,19 @@ oneswap.escrow.getSwap(id: string): Promise<EscrowSwap>
 </ParamField>
 
 ```typescript
-const swap = await oneswap.escrow.getSwap('esc_...')
+const swap = await oneswap.swaps.getSwap('esc_...')
 console.log(swap.status)
 ```
 
-## `escrow.waitForSwap`
+## `swaps.waitForSwap`
 
-Poll a swap until it reaches a terminal status (`returned`, `refunded`, `expired`, or `failed`), or until the local timeout. Resolves with the final [`EscrowSwap`](/reference/types#escrowswap).
+Poll a swap until it reaches a terminal status (`returned`, `refunded`, `expired`, or `failed`), or until the local timeout. Resolves with the final [`Swap`](/reference/types#swap).
 
 ```typescript
-oneswap.escrow.waitForSwap(id: string, opts?: {
+oneswap.swaps.waitForSwap(id: string, opts?: {
   pollMs?: number
   timeoutMs?: number
-}): Promise<EscrowSwap>
+}): Promise<Swap>
 ```
 
 <ParamField path="id" type="string" required>
@@ -135,7 +138,7 @@ oneswap.escrow.waitForSwap(id: string, opts?: {
 </ParamField>
 
 ```typescript
-const done = await oneswap.escrow.waitForSwap('esc_...', {
+const done = await oneswap.swaps.waitForSwap('esc_...', {
   pollMs: 3000,
   timeoutMs: 900000,
 })
@@ -143,4 +146,124 @@ const done = await oneswap.escrow.waitForSwap('esc_...', {
 if (done.status === 'returned') {
   console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
 }
+```
+
+## `quotes.get`
+
+Quote a swap of `amount` `from`-tokens into `to`-tokens. The SDK resolves the pool that trades the pair (or takes `poolId` verbatim), derives the direction, and returns a [`QuoteResult`](/reference/types#quoteresult) — the quote plus the resolved `poolId` and `xToY`.
+
+```typescript
+oneswap.quotes.get(args: {
+  from: string
+  to: string
+  amount: number
+  poolId?: string
+  walletId?: string
+}): Promise<QuoteResult>
+```
+
+<ParamField path="from" type="string" required>
+  Symbol of the token you pay with, e.g. `'CC'`.
+</ParamField>
+
+<ParamField path="to" type="string" required>
+  Symbol of the token you receive, e.g. `'CBTC'`.
+</ParamField>
+
+<ParamField path="amount" type="number" required>
+  Amount of `from` to swap. Must be positive.
+</ParamField>
+
+<ParamField path="poolId" type="string">
+  Pin a specific pool instead of resolving one from the symbol pair. The pool must still trade
+  exactly `from`/`to`.
+</ParamField>
+
+<ParamField path="walletId" type="string">
+  A custodial wallet id you own — the quote then reports `walletBalanceIn` and
+  `sufficientBalance` for that wallet. Requires an authenticated session context, so most SDK
+  callers omit it.
+</ParamField>
+
+```typescript
+const quote = await oneswap.quotes.get({ from: 'CC', to: 'CBTC', amount: 100 })
+
+console.log(quote.amountOut)      // expected output in CBTC
+console.log(quote.priceImpactPct) // price impact of this trade size
+console.log(quote.effFeeBps)      // effective pool fee after any discount
+console.log(quote.networkFeeIn)   // network fee carved from the input
+console.log(quote.poolId)         // the pool the pair resolved to
+console.log(quote.xToY)           // direction within that pool
+```
+
+Throws [`NoDirectPoolError`](/guides/error-handling#the-no-direct-pool-case) when no pool trades the pair (there is no multi-hop routing) and `AmbiguousPoolPairError` (with `candidates`) when several do — retry with `poolId`. The pool list backing symbol resolution is cached for 30 seconds per client instance.
+
+## `pools.list`
+
+All pools visible to the caller, with live reserves and fee configuration.
+
+```typescript
+oneswap.pools.list(): Promise<Pool[]>
+```
+
+```typescript
+const pools = await oneswap.pools.list()
+for (const p of pools) {
+  console.log(`${p.id}: ${p.assetX.symbol}/${p.assetY.symbol}`, p.reserveX, p.reserveY)
+}
+```
+
+## `pools.get`
+
+One pool plus its full settled-swap history.
+
+```typescript
+oneswap.pools.get(poolId: string): Promise<PoolDetail>  // { pool, swaps }
+```
+
+<ParamField path="poolId" type="string" required>
+  The pool id (`rt-...`), from `pools.list()` or a quote's `poolId`.
+</ParamField>
+
+```typescript
+const { pool, swaps } = await oneswap.pools.get('rt-...')
+console.log(pool.feeBps, swaps.length)
+```
+
+## `pools.getTicker`
+
+Live market data for a pool: USD price derived from the pool's own reserve ratio, 24h change, and 24h volume. Returns a [`PoolTicker`](/reference/types#poolticker). Cached up to 30s server-side.
+
+```typescript
+oneswap.pools.getTicker(poolId: string): Promise<PoolTicker>
+```
+
+<ParamField path="poolId" type="string" required>
+  The pool id (`rt-...`).
+</ParamField>
+
+```typescript
+const ticker = await oneswap.pools.getTicker('rt-...')
+
+console.log(ticker.pair)                 // 'CC/CBTC'
+console.log(ticker.base)                 // the asset being priced, e.g. 'CBTC'
+console.log(ticker.price.usd)            // e.g. '61462.225'
+console.log(ticker.priceChange24h.pct)   // e.g. '1.8342' — or null during warm-up
+console.log(ticker.volume24h.usd)        // 24h volume in USD
+console.log(ticker.volume24h.swaps)      // number of swaps in the window
+```
+
+`priceChange24h` fields are `null` until the pool's price history is at least 24h old, and `price.usd` is `null` for pools that cannot be USD-priced (e.g. unseeded pools).
+
+## `tokens.list`
+
+The tokens OneSwap can settle — display symbol plus the on-ledger instrument identity.
+
+```typescript
+oneswap.tokens.list(): Promise<Token[]>
+```
+
+```typescript
+const tokens = await oneswap.tokens.list()
+console.log(tokens.map((t) => t.symbol)) // ['CC', 'CBTC', ...]
 ```

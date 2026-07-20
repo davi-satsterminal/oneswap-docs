@@ -1,21 +1,23 @@
 ---
 title: "Introduction"
-description: "Embed atomic token swaps for your fund-transfer-only users with the OneSwap SDK."
+description: "Embed token swaps, quotes, and live market data into your app with the OneSwap SDK."
 ---
 
 # OneSwap SDK
 
-OneSwap is an atomic delivery-versus-payment (DvP) DEX on the **Canton Network**. The SDK lets you embed token swaps into your own app for your end-users.
-
-Today the SDK exposes exactly one capability: **escrow swaps**.
+OneSwap is an atomic delivery-versus-payment (DvP) DEX on the **Canton Network**. The SDK lets you embed token swaps, quoting, and live market data into your own app for your end-users.
 
 ```typescript
 import { OneSwap } from '@oneswap/sdk'
 
 const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 
-// 1. Create an escrow swap for your end-user
-const swap = await oneswap.escrow.createSwap({
+// Quote it first: how much HTEST for 0.01 CBTC?
+const quote = await oneswap.quotes.get({ from: 'CBTC', to: 'HTEST', amount: 0.01 })
+console.log(`~${quote.amountOut} HTEST (price impact ${quote.priceImpactPct}%)`)
+
+// 1. Create a swap for your end-user
+const swap = await oneswap.swaps.createSwap({
   userRef: 'user-1042',
   inSymbol: 'CBTC',
   amountIn: 0.01,
@@ -26,26 +28,35 @@ const swap = await oneswap.escrow.createSwap({
 console.log(swap.depositParty)
 
 // 3. Wait for OneSwap to detect the deposit, swap, and return the output
-const done = await oneswap.escrow.waitForSwap(swap.id)
+const done = await oneswap.swaps.waitForSwap(swap.id)
 if (done.status === 'returned') {
   console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
 }
 ```
 
-## What escrow swaps are
+## How swaps work
 
-Escrow swaps are built for integrators who want to offer token swaps to end-users whose wallets **can only make a plain fund transfer** — they cannot sign a Canton DvP transaction themselves.
+Swaps are built for integrators whose end-users' wallets **can only make a plain fund transfer** — they cannot sign a Canton DvP transaction themselves.
 
 Instead of asking the user to co-sign anything, you hand them a Canton party id to send funds to. OneSwap detects the deposit, performs the swap custodially and atomically, and returns the output token **to the party that funded the swap** (return-to-sender).
 
-## How it works
-
-1. Your backend calls `createSwap` and gets back a per-user `depositParty` (a Canton party id) and a `deadline`.
+1. Your backend calls `swaps.createSwap` and gets back a per-user `depositParty` (a Canton party id) and a `deadline`.
 2. You tell your end-user to send `amountIn` of `inSymbol` to `depositParty`.
 3. OneSwap detects the deposit, performs the atomic swap, and returns the output token to the **depositing** party.
-4. You poll `getSwap` (or await `waitForSwap`) until the swap reaches a terminal status.
+4. You poll `swaps.getSwap` (or await `swaps.waitForSwap`) until the swap reaches a terminal status.
 
 Because the swap is atomic DvP, it either completes and returns the output token or the input is refunded — funds are never left stranded by a partial swap.
+
+## Market data and quotes
+
+Alongside swap execution, the SDK reads the DEX itself:
+
+- **`quotes.get({ from, to, amount })`** — a full quote for a pair: expected output, price impact, and the fee breakdown. The SDK resolves which pool trades the pair and the direction for you.
+- **`pools.list()` / `pools.get(id)`** — every visible pool with live reserves and fee configuration, or one pool with its settled-swap history.
+- **`pools.getTicker(id)`** — live USD price, 24h change, and 24h volume for a pool.
+- **`tokens.list()`** — the tokens OneSwap can settle.
+
+Every swap settles against exactly one pool. When no pool trades a pair directly, `quotes.get` throws `NoDirectPoolError` — there is no multi-hop routing, so route through an intermediate asset (usually CC) as two separate swaps.
 
 ## Who it's for
 
@@ -54,30 +65,30 @@ Because the swap is atomic DvP, it either completes and returns the output token
 - Any backend that can call an HTTP API and hold a stable id for each of its users.
 
 <Note>
-  **Availability.** Escrow settlement is processed by a background monitor that is enabled
-  per-deployment. Escrow swaps are live on OneSwap **devnet** today; **mainnet** access is
-  enabled per integrator — reach out to get provisioned. A swap created against a deployment
-  without the monitor stays in `awaiting_deposit` / `deposit_detected` and never settles.
+  **Availability.** Swaps are live on OneSwap **devnet** and **mainnet**. All you need is an SDK
+  API key (`sk_live_...`) — see [API keys](/guides/api-keys). Market data and quotes are
+  read-only and available on both networks.
 </Note>
 
 ## What you get
 
-- **Escrow swaps** — create a swap, hand the user a deposit party, poll to completion.
+- **Swaps** — create a swap, hand the user a deposit party, poll to completion.
 - **Return-to-sender** — output is always paid back to the party that funded the swap.
 - **Atomic DvP** — the swap completes and returns output, or the input is refunded.
 - **No gas for your users** — the per-swap network fee is taken from the input token, so the end-user's wallet needs no CC.
+- **Quotes and market data** — price a swap before creating it, and read pools, tickers, and tokens.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="bolt" href="/quickstart">
-    Install, mint a key, and run your first escrow swap
+    Install, mint a key, and run your first swap
   </Card>
-  <Card title="Escrow swaps guide" icon="arrow-right-arrow-left" href="/guides/escrow-swaps">
+  <Card title="Swaps guide" icon="arrow-right-arrow-left" href="/guides/swaps">
     The full lifecycle, tolerances, and reconciliation
   </Card>
   <Card title="SDK methods" icon="code" href="/reference/sdk-methods">
     Every method and parameter
   </Card>
-  <Card title="REST API" icon="server" href="/reference/rest-api">
-    Raw HTTP for non-JS integrators
+  <Card title="Types" icon="brackets-curly" href="/reference/types">
+    Every TypeScript shape the SDK returns
   </Card>
 </CardGroup>

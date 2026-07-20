@@ -1,6 +1,6 @@
 ---
 title: "Types"
-description: "TypeScript shapes used by the escrow SDK."
+description: "TypeScript shapes used by the OneSwap SDK."
 ---
 
 ## Client options
@@ -8,19 +8,19 @@ description: "TypeScript shapes used by the escrow SDK."
 Options passed to the `OneSwap` constructor.
 
 ```typescript
-interface OneSwapOptions {
+interface OneSwapConfig {
   apiKey: string                          // 'sk_live_...' — sent as the x-sdk-key header
   environment?: 'mainnet' | 'devnet'      // default 'mainnet'; the SDK resolves the URL itself
   timeout?: number                        // per-request timeout in ms (default 30000)
 }
 ```
 
-## `createSwap` args
+## `CreateSwapArgs`
 
-The argument to `oneswap.escrow.createSwap`.
+The argument to `oneswap.swaps.createSwap`.
 
 ```typescript
-interface CreateEscrowSwapArgs {
+interface CreateSwapArgs {
   userRef: string      // your stable id for the end-user (one open swap per userRef at a time)
   inSymbol: string     // token the user deposits, e.g. 'CBTC'
   amountIn: number     // decimal amount of inSymbol to swap
@@ -30,9 +30,9 @@ interface CreateEscrowSwapArgs {
 }
 ```
 
-## `waitForSwap` options
+## `WaitForSwapOptions`
 
-The optional second argument to `oneswap.escrow.waitForSwap`.
+The optional second argument to `oneswap.swaps.waitForSwap`.
 
 ```typescript
 interface WaitForSwapOptions {
@@ -41,12 +41,12 @@ interface WaitForSwapOptions {
 }
 ```
 
-## `EscrowStatus`
+## `SwapStatus`
 
 The lifecycle status of a swap. Terminal statuses are `returned`, `refunded`, `expired`, and `failed`.
 
 ```typescript
-type EscrowStatus =
+type SwapStatus =
   | 'awaiting_deposit'
   | 'deposit_detected'
   | 'swapping'
@@ -56,14 +56,14 @@ type EscrowStatus =
   | 'failed'
 ```
 
-## `EscrowSwap`
+## `Swap`
 
 Returned by `createSwap`, `getSwap`, and `waitForSwap`.
 
 ```typescript
-interface EscrowSwap {
+interface Swap {
   id: string                    // 'esc_...'
-  status: EscrowStatus
+  status: SwapStatus
   poolId: string
   inSymbol: string
   outSymbol: string
@@ -80,7 +80,7 @@ interface EscrowSwap {
 | Field | Notes |
 |---|---|
 | `id` | Swap id, `esc_...`. Store it against your `userRef`. |
-| `status` | See [`EscrowStatus`](#escrowstatus) and the [status reference](/guides/escrow-swaps#status-reference). |
+| `status` | See [`SwapStatus`](#swapstatus) and the [status reference](/guides/swaps#status-reference). |
 | `poolId` | The pool the `{ inSymbol, outSymbol }` pair resolved to. |
 | `amountIn` | The amount the user must deposit — within **1%** tolerance. |
 | `minOut` | The hard output floor, or `null` if none was set. |
@@ -89,3 +89,167 @@ interface EscrowSwap {
 | `amountOut` | The returned amount of `outSymbol`; set once `status` is `returned`. |
 | `senderParty` | The party that funded the deposit; the output is returned here. |
 | `error` | Set when `status` is `failed`. |
+
+## `GetQuoteArgs`
+
+The argument to `oneswap.quotes.get`.
+
+```typescript
+interface GetQuoteArgs {
+  from: string      // symbol of the token you pay with, e.g. 'CC'
+  to: string        // symbol of the token you receive, e.g. 'CBTC'
+  amount: number    // amount of `from` to swap (positive)
+  poolId?: string   // pin a pool instead of resolving from symbols
+  walletId?: string // custodial wallet id — adds walletBalanceIn/sufficientBalance
+}
+```
+
+## `Quote`
+
+A swap quote. Amounts are numbers denominated in the input/output token.
+
+```typescript
+interface Quote {
+  amountOut: number            // expected output in the `to` token
+  priceImpactPct: number       // price impact of this trade size, in percent
+  networkFeeIn: number         // network fee carved from the input token
+  swapFeeBps: number           // the pool's configured fee, in basis points
+  effFeeBps: number            // effective fee after any discount
+  discountBps: number          // discount applied to the platform slice, in bps
+  newReserveX: number          // pool reserve X after this swap
+  newReserveY: number          // pool reserve Y after this swap
+  effInput: number             // input actually swapped (amount − networkFeeIn)
+  inputCredit: number          // input credited to the pool reserve (effInput − platformFee)
+  platformFee: number          // platform slice of the pool fee, in the input token
+  lpFee: number                // LP slice of the pool fee, in the input token
+  inSym: string                // symbol of the input token
+  lpShare: number              // LP share of the pool fee (fraction)
+  platformShare: number        // platform share of the pool fee (fraction)
+  effectiveFeeRate: number     // effFeeBps as a fraction
+  chargedPlatformRate: number  // platform rate actually charged, as a fraction
+  walletBalanceIn?: number     // only when walletId was passed: spendable input balance
+  sufficientBalance?: boolean  // only when walletId was passed: balance covers `amount`
+}
+```
+
+## `QuoteResult`
+
+What `quotes.get` returns: the [`Quote`](#quote) plus the resolution the SDK did for you.
+
+```typescript
+interface QuoteResult extends Quote {
+  poolId: string  // the pool the pair resolved to
+  xToY: boolean   // direction within that pool (true = paying with assetX)
+}
+```
+
+## `Token`
+
+One entry from `tokens.list()`.
+
+```typescript
+interface Token {
+  symbol: string       // display symbol, e.g. 'CC'
+  admin: string        // on-ledger instrument admin party
+  id: string           // on-ledger instrument id, e.g. 'Amulet'
+  registryUrl?: string // registrar base URL, when the token needs a dedicated one
+}
+```
+
+## `Pool`
+
+One entry from `pools.list()` (and the `pool` field of [`PoolDetail`](#pooldetail)).
+
+```typescript
+interface PoolAsset {
+  symbol: string
+  admin: string
+  id: string
+}
+
+interface Pool {
+  id: string                        // 'rt-...'
+  name: string | null
+  assetX: PoolAsset
+  assetY: PoolAsset
+  reserveX: number                  // live reserve of assetX
+  reserveY: number                  // live reserve of assetY
+  feeBps: number                    // total swap fee in basis points
+  totalLpTokens: number
+  visible?: boolean
+  swapsEnabled?: boolean            // false = liquidity-only mode (quotes/swaps rejected)
+  asyncSettlement?: boolean
+  lpFeeShare?: number | null
+  platformFeeShare?: number | null
+  createdAt?: string
+  primary?: boolean                 // pools.list() only: the operator-designated default pool
+  swaps?: number                    // pools.list() only: settled-swap count
+}
+```
+
+## `PoolDetail`
+
+What `pools.get(id)` returns.
+
+```typescript
+interface PoolDetail {
+  pool: Pool
+  swaps: PoolSwap[]  // full settled-swap history, oldest first
+}
+
+// A settled swap as recorded by the backend. Wire shape is the raw ledger row:
+// snake_case keys, numeric columns serialized as strings.
+interface PoolSwap {
+  id: string
+  pool_id: string
+  at: string              // ISO timestamp
+  update_id: string | null
+  trader: string
+  x_to_y: boolean
+  amount_in: string
+  amount_out: string
+  network_fee_in: string
+  swap_fee: string
+  new_reserve_x: string
+  new_reserve_y: string
+}
+```
+
+## `PoolTicker`
+
+What `pools.getTicker(id)` returns. Formatted figures are strings; `null` means "not derivable right now".
+
+```typescript
+interface PoolTicker {
+  poolId: string
+  pair: string           // e.g. 'CC/CBTC' — assetX/assetY as configured on the pool
+  base: string | null    // the asset being priced (e.g. 'CBTC'); null when un-priceable
+  pricedVia: string      // how the USD value was derived (e.g. 'CC/USDCx')
+  price: { usd: string | null }
+  priceChange24h: {
+    pct: string | null   // percent change vs ~24h ago; null during warm-up
+    from: string | null  // USD price ~24h ago
+    to: string | null    // USD price now
+  }
+  volume24h: {
+    usd: string | null   // 24h volume at current USD prices
+    swaps: number        // number of swaps in the window
+  }
+  asOf: string           // ISO timestamp the ticker was computed
+}
+```
+
+`priceChange24h` fields are `null` until the pool's hourly price history is at least 24h old (warm-up), and `price.usd` is `null` when the pool cannot be USD-priced (e.g. unseeded).
+
+## `PoolPairCandidate`
+
+Carried by `AmbiguousPoolPairError.candidates` when several pools trade a requested pair.
+
+```typescript
+interface PoolPairCandidate {
+  poolId: string
+  name: string | null
+  assetX: string  // symbol
+  assetY: string  // symbol
+}
+```

@@ -1,9 +1,9 @@
 ---
 title: "API keys"
-description: "Create, rotate, and revoke the SDK keys that authenticate your escrow requests."
+description: "Create, rotate, and revoke the SDK keys that authenticate your requests."
 ---
 
-Every escrow request is authenticated with an **integrator API key**. You create and manage keys from your OneSwap account (self-serve), then pass the key to the SDK.
+Every swap request is authenticated with an **integrator API key**. You create and manage keys from your OneSwap account (self-serve), then pass the key to the SDK.
 
 ## Key format
 
@@ -20,7 +20,7 @@ sk_live_0a1b2c3d…4e5f6071   # sk_live_ + 48 hex chars (shown once, at creation
 
 ## How the SDK uses the key
 
-Pass the key when you construct the client. The SDK sends it on every escrow request as the HTTP header `x-sdk-key`:
+Pass the key when you construct the client. The SDK sends it on every request as the HTTP header `x-sdk-key`:
 
 ```typescript
 import { OneSwap } from '@oneswap/sdk'
@@ -30,88 +30,50 @@ const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 
 ## Creating a key
 
-Key management uses your **account session** (`Authorization: Bearer <session>`), not the SDK key. Create a key with an optional label:
-
-```bash
-curl -X POST https://api.oneswap.cc/swapv2/api/account/sdk-keys \
-  -H "Authorization: Bearer <session>" \
-  -H "Content-Type: application/json" \
-  -d '{ "label": "production backend" }'
-```
-
-Response — the `key` field is the plaintext `sk_live_...`, shown **once**:
-
-```json
-{
-  "id": "key_...",
-  "key": "sk_live_...",
-  "label": "production backend"
-}
-```
-
-Copy the `key` value into your server's secret store immediately.
+Sign in to your OneSwap account and open the **SDK keys** section. Create a key with an
+optional label (e.g. "production backend"). The response shows the plaintext `sk_live_...`
+value **once** — copy it into your server's secret store immediately.
 
 ## Listing keys
 
-Listing never returns the secret again — only metadata:
-
-```bash
-curl https://api.oneswap.cc/swapv2/api/account/sdk-keys \
-  -H "Authorization: Bearer <session>"
-```
-
-```json
-{
-  "keys": [
-    {
-      "id": "key_...",
-      "label": "production backend",
-      "active": true,
-      "ratePerMin": 60,
-      "createdAt": "2026-07-18T12:00:00.000Z"
-    }
-  ]
-}
-```
-
-`ratePerMin` is the key's per-minute rate limit — see [Rate limits](#rate-limits).
+The same account page lists your keys — label, active state, rate limit, and creation date.
+The secret is never shown again; only metadata is listed.
 
 ## Rotating a key
 
 There is no in-place rotation. To rotate:
 
-1. Create a new key (`POST /api/account/sdk-keys`).
+1. Create a new key from your account.
 2. Deploy it to your servers.
 3. Revoke the old key once nothing uses it.
 
 ## Revoking a key
 
-Revoke (delete) a key by id. This is how you rotate out a leaked or retired key:
-
-```bash
-curl -X DELETE https://api.oneswap.cc/swapv2/api/account/sdk-keys/key_... \
-  -H "Authorization: Bearer <session>"
-```
-
-```json
-{ "ok": true }
-```
+Revoke (delete) a key from the same account page. This is how you rotate out a leaked or
+retired key — revocation is immediate.
 
 ## Rate limits
 
-Each key has a per-minute rate limit (`ratePerMin`). The two escrow endpoints are tiered relative to it:
+Each key has a base per-minute rate limit (`ratePerMin`), and operations are tiered relative to it:
 
 | Operation | Limit |
 |---|---|
-| Create a swap (`POST /api/sdk/escrow/swap`) | The tightest tier — **1×** the key's per-minute limit |
-| Poll a swap (`GET /api/sdk/escrow/swap/:id`) | **4×** the create rate |
+| `swaps.createSwap` | The tightest tier — **1×** the key's per-minute limit |
+| `swaps.getSwap` / `swaps.waitForSwap` polling | **4×** the create rate |
+| `quotes.get`, `pools.*`, `tokens.list` | Generous read ceilings, shared with anonymous traffic |
 
-Exceeding a limit returns HTTP `429`. Back off and retry — see [Error handling](/guides/error-handling).
+On top of the base limit, OneSwap can configure **per-operation limits for your key**
+(different ceilings for creating swaps, quoting, reading tickers, and so on). If your
+integration needs more headroom on a specific operation — say, high-frequency quoting —
+ask for a per-operation raise rather than a blanket one.
+
+Exceeding a limit returns HTTP `429` (`RateLimitError`). Back off and retry — see
+[Error handling](/guides/error-handling).
 
 ## Security best practices
 
 <Warning>
-  Treat your `sk_live_` key like a password. Anyone with it can create escrow swaps under your
+  Treat your `sk_live_` key like a password. Anyone with it can create swaps under your
   integrator account.
 </Warning>
 

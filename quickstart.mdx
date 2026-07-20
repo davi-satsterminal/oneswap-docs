@@ -1,16 +1,9 @@
 ---
 title: "Quickstart"
-description: "Run your first escrow swap in under 5 minutes."
+description: "Quote and run your first swap in under 5 minutes."
 ---
 
-This walks you through one complete escrow swap: create it, hand your user a deposit party, and wait for the output to be returned to them.
-
-<Note>
-  Escrow settlement is processed by a background monitor that is enabled per-deployment.
-  Escrow swaps are live on OneSwap **devnet** today; **mainnet** access is enabled per
-  integrator — reach out to get provisioned. Against a deployment without the monitor, a swap
-  stays in `awaiting_deposit` / `deposit_detected` and never settles.
-</Note>
+This walks you through one complete swap: quote it, create it, hand your user a deposit party, and wait for the output to be returned to them.
 
 <Steps>
   <Step title="Install the SDK">
@@ -35,7 +28,7 @@ This walks you through one complete escrow swap: create it, hand your user a dep
     const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
     ```
 
-    The client sends your key on every escrow request as the `x-sdk-key` header. It talks to
+    The client sends your key on every request as the `x-sdk-key` header. It talks to
     **mainnet** by default; pass `environment: 'devnet'` to use the devnet backend — the SDK
     resolves the URL itself, so you never set one:
 
@@ -47,9 +40,29 @@ This walks you through one complete escrow swap: create it, hand your user a dep
     ```
   </Step>
 
-  <Step title="Create the escrow swap">
+  <Step title="Quote the swap">
+    Before creating anything, ask what the swap would return. The SDK finds the pool that
+    trades the pair and derives the direction for you:
+
     ```typescript
-    const swap = await oneswap.escrow.createSwap({
+    const quote = await oneswap.quotes.get({
+      from: 'CBTC',   // token the user pays with
+      to: 'HTEST',    // token the user receives
+      amount: 0.01,   // amount of `from` to swap
+    })
+
+    console.log(quote.amountOut)      // expected output, before it moves
+    console.log(quote.priceImpactPct) // price impact of this trade size
+    console.log(quote.poolId)         // the pool the pair resolved to
+    ```
+
+    If no pool trades the pair directly, this throws `NoDirectPoolError` — route through an
+    intermediate asset (usually CC) as two separate swaps.
+  </Step>
+
+  <Step title="Create the swap">
+    ```typescript
+    const swap = await oneswap.swaps.createSwap({
       userRef: 'user-1042', // your stable id for this end-user
       inSymbol: 'CBTC',      // token the user deposits
       amountIn: 0.01,        // amount of inSymbol to swap
@@ -75,7 +88,7 @@ This walks you through one complete escrow swap: create it, hand your user a dep
 
   <Step title="Wait for completion">
     ```typescript
-    const done = await oneswap.escrow.waitForSwap(swap.id)
+    const done = await oneswap.swaps.waitForSwap(swap.id)
 
     if (done.status === 'returned') {
       // Success — output was paid back to the party that funded the swap
@@ -93,27 +106,30 @@ This walks you through one complete escrow swap: create it, hand your user a dep
 
 ## Complete example
 
-<CodeGroup>
-```typescript TypeScript
+```typescript
 import { OneSwap } from '@oneswap/sdk'
 
 const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
 
 async function swapForUser() {
-  // 1. Create the escrow swap
-  const swap = await oneswap.escrow.createSwap({
+  // 1. Quote it first
+  const quote = await oneswap.quotes.get({ from: 'CBTC', to: 'HTEST', amount: 0.01 })
+  console.log(`Expecting ~${quote.amountOut} HTEST (impact ${quote.priceImpactPct}%)`)
+
+  // 2. Create the swap
+  const swap = await oneswap.swaps.createSwap({
     userRef: 'user-1042',
     inSymbol: 'CBTC',
     amountIn: 0.01,
     outSymbol: 'HTEST',
   })
 
-  // 2. Show your end-user where to send the deposit
+  // 3. Show your end-user where to send the deposit
   console.log(`Send ${swap.amountIn} ${swap.inSymbol} to ${swap.depositParty}`)
   console.log(`Deposit before ${swap.deadline}`)
 
-  // 3. Wait for OneSwap to detect, swap, and return the output
-  const done = await oneswap.escrow.waitForSwap(swap.id)
+  // 4. Wait for OneSwap to detect, swap, and return the output
+  const done = await oneswap.swaps.waitForSwap(swap.id)
 
   if (done.status === 'returned') {
     console.log(`Done — returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
@@ -125,39 +141,37 @@ async function swapForUser() {
 swapForUser()
 ```
 
-```bash curl
-# 1. Create the escrow swap
-curl -X POST https://api.oneswap.cc/swapv2/api/sdk/escrow/swap \
-  -H "x-sdk-key: sk_live_..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userRef": "user-1042",
-    "inSymbol": "CBTC",
-    "amountIn": 0.01,
-    "outSymbol": "HTEST"
-  }'
-# → { "id": "esc_...", "status": "awaiting_deposit", "depositParty": "...", "deadline": "..." }
+## Reading the market
 
-# 2. Poll the swap until it reaches a terminal status
-curl https://api.oneswap.cc/swapv2/api/sdk/escrow/swap/esc_... \
-  -H "x-sdk-key: sk_live_..."
-# → { "id": "esc_...", "status": "returned", "amountOut": 0.98, "senderParty": "...", ... }
+The same client reads pools, tickers, and tokens — useful for building your own token pickers
+and price displays:
+
+```typescript
+const tokens = await oneswap.tokens.list()   // what can be swapped
+const pools = await oneswap.pools.list()     // every visible pool, with live reserves
+
+// Live market data for the pool your quote resolved to
+const ticker = await oneswap.pools.getTicker(quote.poolId)
+console.log(`${ticker.pair}: $${ticker.price.usd} (${ticker.priceChange24h.pct ?? '—'}% 24h)`)
+console.log(`24h volume: $${ticker.volume24h.usd} across ${ticker.volume24h.swaps} swaps`)
 ```
-</CodeGroup>
+
+`priceChange24h` fields are `null` while the price history is warming up (the first 24h after a
+pool starts being tracked).
 
 ## What's next
 
 <CardGroup cols={2}>
-  <Card title="Escrow swaps guide" icon="arrow-right-arrow-left" href="/guides/escrow-swaps">
+  <Card title="Swaps guide" icon="arrow-right-arrow-left" href="/guides/swaps">
     Lifecycle, tolerances, min-out, and reconciliation
   </Card>
   <Card title="API keys" icon="key" href="/guides/api-keys">
     Create, rotate, and revoke keys safely
   </Card>
   <Card title="Error handling" icon="triangle-exclamation" href="/guides/error-handling">
-    Refunds, expiries, and robust polling
+    Typed errors, refunds, expiries, and robust polling
   </Card>
   <Card title="SDK methods" icon="code" href="/reference/sdk-methods">
-    The full escrow client surface
+    The full client surface
   </Card>
 </CardGroup>

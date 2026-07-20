@@ -1,38 +1,57 @@
 ---
 title: "Error handling"
-description: "How escrow swaps fail, and how to handle it safely."
+description: "Typed SDK errors, terminal statuses, and how to handle both safely."
 ---
 
-Escrow failures come in two shapes:
+Failures come in two shapes:
 
-1. **Thrown errors** — the SDK throws a plain `Error` whose `message` is the server message. These happen at call time (`createSwap`, `getSwap`, `waitForSwap`) — for example a bad pair, an already-open swap, an invalid key, or a rate limit.
+1. **Thrown errors** — the SDK throws a typed error (every class extends `OneSwapError`). These happen at call time (`swaps.createSwap`, `quotes.get`, …) — for example a pair with no pool, an already-open swap, an invalid key, or a rate limit.
 2. **Terminal statuses** — the swap is created successfully but ends in a non-success terminal state (`refunded`, `expired`, `failed`). You read these off the swap's `status`, not from a thrown error.
 
-Because escrow swaps are **atomic DvP**, a swap that does not complete has its input **refunded** — funds are never stranded by a partial swap.
+Because swaps are **atomic DvP**, a swap that does not complete has its input **refunded** — funds are never stranded by a partial swap.
 
-## Thrown errors
+## Typed errors
 
-The SDK throws a standard `Error`. Inspect `err.message` for the server's message:
+Every error extends `OneSwapError`, which carries an optional `status` (HTTP status code) and `data` (the parsed response body). Catch by class with `instanceof`:
 
 ```typescript
+import {
+  OneSwap,
+  OpenSwapExistsError,
+  NoDirectPoolError,
+  RateLimitError,
+  AuthError,
+} from '@oneswap/sdk'
+
 try {
-  const swap = await oneswap.escrow.createSwap({
+  const swap = await oneswap.swaps.createSwap({
     userRef: 'user-1042',
     inSymbol: 'CBTC',
     amountIn: 0.01,
     outSymbol: 'HTEST',
   })
 } catch (err) {
-  console.log((err as Error).message)
+  if (err instanceof OpenSwapExistsError) {
+    // this user already has an open swap — resume it instead
+  } else if (err instanceof RateLimitError) {
+    // back off and retry
+  } else {
+    throw err
+  }
 }
 ```
 
-| Message / condition | HTTP | When | What to do |
+| Class | HTTP | When | What to do |
 |---|---|---|---|
-| `this user already has an open swap; finish or let it expire first` | — | You called `createSwap` for a `userRef` that already has an open (non-terminal) swap | Resume the existing swap, or wait for it to reach a terminal status / expire before creating another |
-| `no pool for IN/OUT` | — | `{ inSymbol, outSymbol }` does not match a visible pool | Fix the symbols, or pick a pair that has a live pool |
-| Invalid / missing `x-sdk-key` | `401` | The API key is missing, malformed, or revoked | Check the key and mint a new one if needed |
-| Rate limit exceeded | `429` | Too many requests for the key's per-minute tier | Back off and retry (see below) |
+| `OpenSwapExistsError` | `409` | `createSwap` for a `userRef` that already has an open (non-terminal) swap | Resume the existing swap, or wait for it to reach a terminal status / expire |
+| `NoDirectPoolError` | — | `quotes.get` for a pair no pool trades directly (`createSwap` errors similarly with `no pool for IN/OUT`) | Route through an intermediate asset (usually CC) as two separate swaps |
+| `AmbiguousPoolPairError` | — | `quotes.get` for a pair that several pools trade; carries `candidates` | Retry with `poolId` set to one of the candidates |
+| `ValidationError` | `400` | Bad arguments (missing symbols, non-positive amount, mismatched `poolId`) | Fix the request |
+| `AuthError` | `401` | The API key is missing, malformed, or revoked | Check the key and mint a new one if needed |
+| `NotFoundError` | `404` | Unknown swap id or pool id | Check the id |
+| `RateLimitError` | `429` | Too many requests for the key's per-minute tier | Back off and retry (see below) |
+| `ServerError` | `5xx` | The API failed to process the request | Retry with backoff; contact OneSwap if persistent |
+| `NetworkError` / `TimeoutError` | — | The request never completed (connection failure / local timeout) | Retry; the operation may or may not have happened — reads are safe to repeat |
 
 ## Terminal statuses
 
@@ -50,14 +69,16 @@ A created swap always reaches one of these terminal statuses. Read `status` (and
 Only one open swap per `userRef` is allowed. When you hit this, don't create a duplicate — look up the swap you already have for that user and resume it:
 
 ```typescript
+import { OpenSwapExistsError } from '@oneswap/sdk'
+
 async function createOrResume(args) {
   try {
-    return await oneswap.escrow.createSwap(args)
+    return await oneswap.swaps.createSwap(args)
   } catch (err) {
-    if ((err as Error).message.includes('already has an open swap')) {
+    if (err instanceof OpenSwapExistsError) {
       // Resume the swap you stored against this userRef instead of creating a new one
       const existingId = lookupSwapId(args.userRef)
-      return oneswap.escrow.getSwap(existingId)
+      return oneswap.swaps.getSwap(existingId)
     }
     throw err
   }
@@ -66,18 +87,39 @@ async function createOrResume(args) {
 
 Store `swap.id` against your `userRef` at creation so you can always find the open swap again.
 
-## Rate limits
+## The "no direct pool" case
 
-Requests beyond a key's per-minute tier return `429`. Create is the tightest tier (1× the key's per-minute limit); polling is 4× the create rate. Back off and retry:
+Every swap settles against one pool, and there is no multi-hop routing. `quotes.get` throws
+`NoDirectPoolError` when no pool trades the pair — the error tells you both symbols so you can
+route through an intermediate asset yourself:
 
 ```typescript
+import { NoDirectPoolError } from '@oneswap/sdk'
+
+try {
+  await oneswap.quotes.get({ from: 'HANDL', to: 'EDELx', amount: 100 })
+} catch (err) {
+  if (err instanceof NoDirectPoolError) {
+    // No HANDL/EDELx pool. Two swaps instead: HANDL→CC, then CC→EDELx —
+    // two settlements, two network fees, and the price can move between legs.
+  }
+}
+```
+
+## Rate limits
+
+Requests beyond a key's per-minute tier throw `RateLimitError` (`429`). Create is the tightest tier; polling and reads are looser. Back off and retry:
+
+```typescript
+import { RateLimitError } from '@oneswap/sdk'
+
 async function pollWithBackoff(id: string) {
   let delay = 3000
   for (;;) {
     try {
-      return await oneswap.escrow.getSwap(id)
+      return await oneswap.swaps.getSwap(id)
     } catch (err) {
-      if ((err as Error).message.toLowerCase().includes('rate')) {
+      if (err instanceof RateLimitError) {
         await new Promise((r) => setTimeout(r, delay))
         delay = Math.min(delay * 2, 30000)
         continue
@@ -96,7 +138,7 @@ Prefer `waitForSwap` (or a fixed poll interval) over tight polling loops so you 
 async function runSwap() {
   let swap
   try {
-    swap = await oneswap.escrow.createSwap({
+    swap = await oneswap.swaps.createSwap({
       userRef: 'user-1042',
       inSymbol: 'CBTC',
       amountIn: 0.01,
@@ -111,7 +153,7 @@ async function runSwap() {
   // Show the user where to deposit.
   console.log(`Send ${swap.amountIn} ${swap.inSymbol} to ${swap.depositParty} before ${swap.deadline}`)
 
-  const done = await oneswap.escrow.waitForSwap(swap.id)
+  const done = await oneswap.swaps.waitForSwap(swap.id)
 
   switch (done.status) {
     case 'returned':
@@ -132,7 +174,5 @@ async function runSwap() {
 
 <Note>
   If `waitForSwap` times out while a swap is still non-terminal, the swap may still settle. Resume
-  with `getSwap(id)` rather than treating it as failed. And remember: against a deployment without
-  the escrow monitor enabled, a swap stays in `awaiting_deposit` / `deposit_detected` and never
-  reaches a terminal status.
+  with `getSwap(id)` rather than treating it as failed.
 </Note>
