@@ -24,7 +24,7 @@
     {
       "group": "Guides",
       "pages": [
-        "guides/escrow-swaps",
+        "guides/swaps",
         "guides/api-keys",
         "guides/error-handling"
       ]
@@ -33,7 +33,6 @@
       "group": "Reference",
       "pages": [
         "reference/sdk-methods",
-        "reference/rest-api",
         "reference/types"
       ]
     }

@@ -1,20 +1,20 @@
 ---
-title: "Escrow swaps"
-description: "The full escrow swap lifecycle: deposit parties, tolerances, return-to-sender, and reconciliation."
+title: "Swaps"
+description: "The full swap lifecycle: deposit parties, tolerances, return-to-sender, and reconciliation."
 ---
 
-Escrow swaps let you offer token swaps to end-users who can only make a **plain fund transfer** — their wallet cannot sign a Canton DvP transaction. You create a swap, hand the user a Canton party to fund, and OneSwap does the rest custodially and atomically, returning the output token to the party that funded the swap.
+Swaps let you offer token exchange to end-users who can only make a **plain fund transfer** — their wallet cannot sign a Canton DvP transaction. You create a swap, hand the user a Canton party to fund, and OneSwap does the rest custodially and atomically, returning the output token to the party that funded the swap.
 
 ## Lifecycle
 
 <Steps>
   <Step title="Create the swap">
-    Call `createSwap` with your stable `userRef`, the input token and amount, and the output token.
-    OneSwap resolves the `{ inSymbol, outSymbol }` pair to a visible pool and returns an
-    `EscrowSwap` in status `awaiting_deposit` with a per-user `depositParty` and a `deadline`.
+    Call `swaps.createSwap` with your stable `userRef`, the input token and amount, and the output token.
+    OneSwap resolves the `{ inSymbol, outSymbol }` pair to a visible pool and returns a
+    [`Swap`](/reference/types#swap) in status `awaiting_deposit` with a per-user `depositParty` and a `deadline`.
 
     ```typescript
-    const swap = await oneswap.escrow.createSwap({
+    const swap = await oneswap.swaps.createSwap({
       userRef: 'user-1042',
       inSymbol: 'CBTC',
       amountIn: 0.01,
@@ -69,7 +69,7 @@ By default OneSwap applies **2% (200 bps)** slippage tolerance. You can override
 - `minOut` — set a hard floor on the output amount. If the swap would return less than `minOut` of `outSymbol`, it is **refunded** instead.
 
 ```typescript
-const swap = await oneswap.escrow.createSwap({
+const swap = await oneswap.swaps.createSwap({
   userRef: 'user-1042',
   inSymbol: 'CBTC',
   amountIn: 0.01,
@@ -79,17 +79,26 @@ const swap = await oneswap.escrow.createSwap({
 })
 ```
 
+<Tip>
+  Use [`quotes.get`](/reference/sdk-methods#quotes-get) to price the swap first — its
+  `amountOut` is the natural basis for a sensible `minOut`.
+</Tip>
+
 ## Return-to-sender semantics
 
-The output is always paid back to the party that **funded** the deposit, reported as `senderParty` on the returned swap. You do not supply a destination address — there isn't one to get wrong. This is what makes escrow swaps safe for fund-transfer-only wallets: the user gets their output at the same party they sent from.
+The output is always paid back to the party that **funded** the deposit, reported as `senderParty` on the returned swap. You do not supply a destination address — there isn't one to get wrong. This is what makes these swaps safe for fund-transfer-only wallets: the user gets their output at the same party they sent from.
 
 ## One open swap per user
 
-At most **one open (non-terminal) escrow swap per `userRef`** may exist at a time. If you call `createSwap` for a `userRef` that already has an open swap, the call errors:
+At most **one open (non-terminal) swap per `userRef`** may exist at a time. If you call `createSwap` for a `userRef` that already has an open swap, the call throws `OpenSwapExistsError`:
 
 > this user already has an open swap; finish or let it expire first
 
 Wait for the existing swap to reach a terminal status, or let it `expire`, before creating another for the same user. See [Error handling](/guides/error-handling) for how to detect and recover from this.
+
+## One pool per swap
+
+Every swap settles against exactly **one pool**. The `{ inSymbol, outSymbol }` pair must have a live pool that trades it directly; if it doesn't, `createSwap` errors (and `quotes.get` throws `NoDirectPoolError`). There is no multi-hop routing — to move between two tokens with no shared pool, run two swaps through an intermediate asset (usually CC), each with its own settlement and fees.
 
 ## Network fee comes from the input
 
@@ -97,7 +106,7 @@ A per-swap network fee is taken **from the input token** to cover the on-chain s
 
 ## Atomic settlement
 
-Escrow swaps are atomic DvP. The swap either **completes and returns the output token**, or the **input is refunded** — funds are never stranded by a partial swap. That means every swap you create ends in a clean terminal state you can act on.
+Swaps are atomic DvP. The swap either **completes and returns the output token**, or the **input is refunded** — funds are never stranded by a partial swap. That means every swap you create ends in a clean terminal state you can act on.
 
 ## Reconciling on your side
 
@@ -112,7 +121,7 @@ Use your own `userRef` as the reconciliation key:
 Poll `getSwap` on your own cadence:
 
 ```typescript
-const swap = await oneswap.escrow.createSwap({
+const swap = await oneswap.swaps.createSwap({
   userRef: 'user-1042',
   inSymbol: 'CBTC',
   amountIn: 0.01,
@@ -121,10 +130,10 @@ const swap = await oneswap.escrow.createSwap({
 
 const terminal = new Set(['returned', 'refunded', 'expired', 'failed'])
 
-let current = await oneswap.escrow.getSwap(swap.id)
+let current = await oneswap.swaps.getSwap(swap.id)
 while (!terminal.has(current.status)) {
   await new Promise((r) => setTimeout(r, 3000))
-  current = await oneswap.escrow.getSwap(swap.id)
+  current = await oneswap.swaps.getSwap(swap.id)
 }
 
 console.log('Final status:', current.status)
@@ -135,7 +144,7 @@ console.log('Final status:', current.status)
 `waitForSwap` wraps the polling loop for you and resolves on the first terminal status (or on timeout):
 
 ```typescript
-const done = await oneswap.escrow.waitForSwap(swap.id, {
+const done = await oneswap.swaps.waitForSwap(swap.id, {
   pollMs: 3000,       // poll interval (default 3000)
   timeoutMs: 900000,  // give up after 15 min (default 900000)
 })
@@ -157,8 +166,6 @@ switch (done.status) {
 ```
 
 <Note>
-  Escrow settlement is processed by a background monitor that is enabled per-deployment. Escrow
-  swaps are live on OneSwap **devnet** today; **mainnet** access is enabled per integrator —
-  reach out to get provisioned. Against a deployment without the monitor, a swap stays in
-  `awaiting_deposit` / `deposit_detected` and never settles.
+  Swaps are live on OneSwap **devnet** and **mainnet** — see [API keys](/guides/api-keys) for
+  getting your `sk_live_...` credential.
 </Note>
