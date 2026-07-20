@@ -80,8 +80,9 @@ const swap = await oneswap.swaps.createSwap({
 ```
 
 <Tip>
-  Use [`quotes.get`](/reference/sdk-methods#quotes-get) to price the swap first — its
-  `amountOut` is the natural basis for a sensible `minOut`.
+  Use [`quotes.get`](/reference/sdk-methods) to price the swap first — its
+  `amountOut` is the natural basis for a sensible `minOut` (leave room for the
+  network fee, which is settled from the input).
 </Tip>
 
 ## Return-to-sender semantics
