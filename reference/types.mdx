@@ -43,18 +43,28 @@ interface WaitForSwapOptions {
 
 ## `SwapStatus`
 
-The lifecycle status of a swap. Terminal statuses are `returned`, `refunded`, `expired`, and `failed`.
+The lifecycle status of a swap. Terminal statuses are `returned`, `refunded`, `expired`, `failed`, and `cancelled`.
 
 ```typescript
 type SwapStatus =
   | 'awaiting_deposit'
   | 'deposit_detected'
   | 'swapping'
+  | 'recovering'
+  | 'needs_review'
   | 'returned'
   | 'refunded'
   | 'expired'
   | 'failed'
+  | 'cancelled'
 ```
+
+<Info>
+  SDK 1.2.0 added `cancelled`, and added `recovering` and `needs_review` to the union — those
+  two were always reachable, but were missing from the published type. Both are **non-terminal**:
+  the funds are in motion and `waitForSwap` keeps polling. If you `switch` exhaustively over
+  `SwapStatus`, you may need new cases.
+</Info>
 
 ## `Swap`
 

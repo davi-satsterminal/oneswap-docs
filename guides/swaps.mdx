@@ -41,17 +41,20 @@ Swaps let you offer token exchange to end-users who can only make a **plain fund
 
 ## Status reference
 
-Terminal statuses are `returned`, `refunded`, `expired`, and `failed`.
+Terminal statuses are `returned`, `refunded`, `expired`, `failed`, and `cancelled`.
 
 | Status | Meaning |
 |---|---|
 | `awaiting_deposit` | Created; waiting for the end-user's deposit to `depositParty`. |
 | `deposit_detected` | The deposit has been seen on-ledger. |
 | `swapping` | The atomic swap is in progress. |
+| `recovering` | A step failed while holding the deposit; it is being retried and the funds returned to the sender. Not terminal — keep polling. |
+| `needs_review` | Automatic recovery was exhausted. The funds are safe and a human is resolving it. Not terminal. |
 | `returned` | **Success.** `amountOut` of `outSymbol` was sent back to `senderParty`. |
 | `refunded` | The deposit was returned to the sender (deposit amount outside tolerance, or output below `minOut`). |
 | `expired` | No deposit arrived before `deadline`; nothing happened. |
 | `failed` | An unexpected error (rare); `error` is set. |
+| `cancelled` | Closed via `swaps.cancel()` before any deposit arrived; nothing happened. |
 
 ## Deposit-amount tolerance
 
@@ -95,7 +98,27 @@ At most **one open (non-terminal) swap per `userRef`** may exist at a time. If y
 
 > this user already has an open swap; finish or let it expire first
 
-Wait for the existing swap to reach a terminal status, or let it `expire`, before creating another for the same user. See [Error handling](/guides/error-handling) for how to detect and recover from this.
+You do not have to wait out the deadline. [`swaps.getOpenSwap(userRef)`](/reference/sdk-methods#swaps-getopenswap) returns that open swap — use it to recover the id when you no longer have it (after a restart, or when the `createSwap` response was lost) — and [`swaps.cancel(id)`](/reference/sdk-methods#swaps-cancel) closes it if no deposit has arrived yet:
+
+```typescript
+import { OpenSwapExistsError } from '@oneswap/sdk'
+
+try {
+  swap = await oneswap.swaps.createSwap({ userRef, inSymbol: 'CC', amountIn: 100, outSymbol: 'CBTC' })
+} catch (err) {
+  if (!(err instanceof OpenSwapExistsError)) throw err
+
+  const open = await oneswap.swaps.getOpenSwap(userRef)
+
+  if (open?.status === 'awaiting_deposit') {
+    await oneswap.swaps.cancel(open.id) // nothing deposited — release it and retry
+  } else if (open) {
+    await oneswap.swaps.waitForSwap(open.id) // funds are in flight — let it finish
+  }
+}
+```
+
+Once a deposit has arrived the swap holds funds and must run to completion — `cancel` throws `ConflictError` (409) in that case, so wait it out instead. See [Error handling](/guides/error-handling) for how to detect and recover from this.
 
 ## One pool per swap
 
@@ -115,7 +138,7 @@ Use your own `userRef` as the reconciliation key:
 
 - Store the returned `swap.id` (an `esc_...` id) against your `userRef` when you create a swap.
 - One open swap per `userRef` means there is never ambiguity about which swap a user's deposit belongs to.
-- On terminal status, record the outcome: `returned` (with `amountOut`), `refunded`, `expired`, or `failed` (with `error`).
+- On terminal status, record the outcome: `returned` (with `amountOut`), `refunded`, `expired`, `cancelled`, or `failed` (with `error`).
 
 ## Polling for status
 
@@ -129,7 +152,7 @@ const swap = await oneswap.swaps.createSwap({
   outSymbol: 'HTEST',
 })
 
-const terminal = new Set(['returned', 'refunded', 'expired', 'failed'])
+const terminal = new Set(['returned', 'refunded', 'expired', 'failed', 'cancelled'])
 
 let current = await oneswap.swaps.getSwap(swap.id)
 while (!terminal.has(current.status)) {
@@ -159,6 +182,9 @@ switch (done.status) {
     break
   case 'expired':
     console.log('No deposit arrived before the deadline')
+    break
+  case 'cancelled':
+    console.log('Cancelled before any deposit arrived')
     break
   case 'failed':
     console.log('Unexpected failure:', done.error)
