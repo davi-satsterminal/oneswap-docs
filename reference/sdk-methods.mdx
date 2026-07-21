@@ -115,7 +115,7 @@ console.log(swap.status)
 
 ## `swaps.waitForSwap`
 
-Poll a swap until it reaches a terminal status (`returned`, `refunded`, `expired`, or `failed`), or until the local timeout. Resolves with the final [`Swap`](/reference/types#swap).
+Poll a swap until it reaches a terminal status (`returned`, `refunded`, `expired`, `failed`, or `cancelled`), or until the local timeout. Resolves with the final [`Swap`](/reference/types#swap).
 
 ```typescript
 oneswap.swaps.waitForSwap(id: string, opts?: {
@@ -145,6 +145,71 @@ const done = await oneswap.swaps.waitForSwap('esc_...', {
 
 if (done.status === 'returned') {
   console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
+}
+```
+
+## `swaps.getOpenSwap`
+
+<Info>Added in SDK 1.2.0.</Info>
+
+Fetch the user's open (non-terminal) swap, or `null` if they have none.
+
+A `userRef` may hold only one open swap at a time — `createSwap` throws [`OpenSwapExistsError`](/guides/error-handling) while one is live. Use this to recover the swap id when you no longer have it: after a process restart, or when the `createSwap` response was lost in flight.
+
+```typescript
+oneswap.swaps.getOpenSwap(userRef: string): Promise<Swap | null>
+```
+
+<ParamField path="userRef" type="string" required>
+  Your stable identifier for the end user, the same value passed to `createSwap`.
+</ParamField>
+
+```typescript
+const open = await oneswap.swaps.getOpenSwap('user-123')
+
+if (open) {
+  console.log(`${open.id} is ${open.status}`)
+}
+```
+
+## `swaps.cancel`
+
+<Info>Added in SDK 1.2.0.</Info>
+
+Cancel a swap that has not yet received a deposit, freeing the user to start another immediately instead of waiting out the one-hour deposit deadline. Resolves with the closed [`Swap`](/reference/types#swap) (`status: 'cancelled'`).
+
+Only a swap still in `awaiting_deposit` can be cancelled. Once a deposit has arrived the swap holds funds and must run to completion — cancelling then throws `ConflictError` (409), and you should `waitForSwap` instead. Calling this on an already-finished swap returns it unchanged, so it is safe to retry.
+
+```typescript
+oneswap.swaps.cancel(id: string): Promise<Swap>
+```
+
+<ParamField path="id" type="string" required>
+  The swap id to cancel (`esc_...`).
+</ParamField>
+
+Together with `getOpenSwap`, this is how you recover from a blocked user:
+
+```typescript
+import { OpenSwapExistsError } from '@oneswap/sdk'
+
+try {
+  swap = await oneswap.swaps.createSwap({
+    userRef: 'user-123',
+    inSymbol: 'CC',
+    amountIn: 100,
+    outSymbol: 'CBTC',
+  })
+} catch (err) {
+  if (!(err instanceof OpenSwapExistsError)) throw err
+
+  const open = await oneswap.swaps.getOpenSwap('user-123')
+
+  if (open?.status === 'awaiting_deposit') {
+    await oneswap.swaps.cancel(open.id) // nothing was deposited — release and retry
+  } else if (open) {
+    await oneswap.swaps.waitForSwap(open.id) // funds are in flight — let it finish
+  }
 }
 ```
 
