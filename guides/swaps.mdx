@@ -83,9 +83,10 @@ const swap = await oneswap.swaps.createSwap({
 ```
 
 <Tip>
-  Use [`quotes.get`](/reference/sdk-methods) to price the swap first — its
-  `amountOut` is the natural basis for a sensible `minOut` (leave room for the
-  network fee, which is settled from the input).
+  Use [`quotes.get`](/reference/sdk-methods) to price the swap first. Quotes made with your
+  SDK key already include the input-token network fee (`feeModel: 'deposit'`), so their
+  `amountOut` matches settlement — use it directly as the basis for `minOut`, minus your
+  slippage margin.
 </Tip>
 
 ## Return-to-sender semantics

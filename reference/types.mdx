@@ -122,8 +122,9 @@ A swap quote. Amounts are numbers denominated in the input/output token.
 interface Quote {
   amountOut: number            // expected output in the `to` token
   priceImpactPct: number       // price impact of this trade size, in percent
-  networkFeeIn: number         // network fee taken from the input at QUOTE time (often 0 —
-                               // deposit swaps settle the network fee from the input later)
+  networkFeeIn: number         // per-swap network fee carved from the input. Priced with the
+                               // settlement fee model when quoting with your SDK key
+                               // (feeModel 'deposit'); 0 under the 'prepaid' model
   swapFeeBps: number           // the pool's configured fee, in basis points
   effFeeBps: number            // effective fee after any discount
   discountBps: number          // discount applied to the platform slice, in bps
@@ -140,6 +141,9 @@ interface Quote {
   chargedPlatformRate: number  // platform rate actually charged, as a fraction
   walletBalanceIn?: number     // only when walletId was passed: spendable input balance
   sufficientBalance?: boolean  // only when walletId was passed: balance covers `amount`
+  feeModel?: 'deposit' | 'prepaid' // how the network fee was priced: 'deposit' (carved from
+                               // the input — the model your SDK-keyed quotes use, matching
+                               // settlement) or 'prepaid' (fee charged outside the input)
 }
 ```
 

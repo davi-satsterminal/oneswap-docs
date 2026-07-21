@@ -264,11 +264,14 @@ console.log(quote.xToY)           // direction within that pool
 Throws [`NoDirectPoolError`](/guides/error-handling#the-no-direct-pool-case) when no pool trades the pair (there is no multi-hop routing) and `AmbiguousPoolPairError` (with `candidates`) when several do — retry with `poolId`. The pool list backing symbol resolution is cached for 30 seconds per client instance.
 
 <Note>
-  `networkFeeIn` can be `0` on a quote — the network fee is not always taken from the input at
-  quote time. Deposit swaps (`swaps.createSwap`) DO settle the per-swap network fee from the
-  input token (see [the Swaps guide](/guides/swaps#network-fee-comes-from-the-input)), so the
-  settled output can come in slightly below a quote whose `networkFeeIn` was `0`. Set `minOut`
-  with that headroom in mind.
+  **Quotes made with your SDK key are settlement-accurate.** Because the SDK sends your
+  `x-sdk-key` on every request, the backend prices your quotes with the same fee model
+  `swaps.createSwap` settles with: the live per-swap network fee is carved from the input
+  (`networkFeeIn` &gt; 0, `effInput` = `amount` − `networkFeeIn`), so `amountOut` matches what
+  the swap actually returns (modulo price movement between quote and settlement). The response
+  reports this as `feeModel: 'deposit'`. Since the fee is roughly flat in USD per swap, it
+  dominates very small amounts — check `networkFeeIn` against `amount` before quoting tiny
+  swaps to users, and base `minOut` on this quote's `amountOut`.
 </Note>
 
 ## `pools.list`
