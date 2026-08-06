@@ -1,345 +1,77 @@
 ---
 title: "SDK methods"
-description: "The full OneSwap client surface: swaps, quotes, pools, and tokens."
+description: "Every method on the OneSwapV2 class."
 ---
 
-The client exposes four namespaces: `swaps` (execution), `quotes`, `pools`, and `tokens` (market data).
-
-## Constructor
-
-```typescript
-import { OneSwap } from '@oneswap/sdk'
-
-const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
+```ts
+import { OneSwapV2 } from 'oneswap-v2-sdk';
+const dex = new OneSwapV2(baseUrl, { session?, adminToken?, slippageBps? });
 ```
 
-<ParamField path="apiKey" type="string" required>
-  Your integrator API key (`sk_live_` followed by 48 hex chars). Sent on every request as
-  the `x-sdk-key` header. Keep it server-side only.
-</ParamField>
-
-<ParamField path="environment" type="'mainnet' | 'devnet'" default="mainnet">
-  Which OneSwap backend to use. The SDK resolves the URL itself — you never pass a raw URL.
-</ParamField>
-
-<ParamField path="timeout" type="number" default="30000">
-  Per-request timeout in milliseconds.
-</ParamField>
-
-```typescript
-// Point at devnet for integration testing
-const oneswap = new OneSwap({
-  apiKey: 'sk_live_...',
-  environment: 'devnet',
-})
-```
-
-## `swaps.createSwap`
-
-Create a swap. Returns a [`Swap`](/reference/types#swap) in status `awaiting_deposit`, carrying the `depositParty` your end-user must fund and the `deadline` they must beat.
-
-```typescript
-oneswap.swaps.createSwap(args: {
-  userRef: string
-  inSymbol: string
-  amountIn: number
-  outSymbol: string
-  minOut?: number
-  slippageBps?: number
-}): Promise<Swap>
-```
-
-<ParamField path="userRef" type="string" required>
-  Your stable id for the end-user. Only one open swap per `userRef` at a time.
-</ParamField>
-
-<ParamField path="inSymbol" type="string" required>
-  The token the user deposits, e.g. `'CBTC'`.
-</ParamField>
-
-<ParamField path="amountIn" type="number" required>
-  Decimal amount of `inSymbol` to swap. The deposit must arrive within **1%** of this amount.
-</ParamField>
-
-<ParamField path="outSymbol" type="string" required>
-  The token to return to the user, e.g. `'HTEST'`.
-</ParamField>
-
-<ParamField path="minOut" type="number">
-  Optional hard floor on the output amount. If the swap would return less than this, it is refunded.
-</ParamField>
-
-<ParamField path="slippageBps" type="number" default="200">
-  Optional slippage tolerance in basis points. Defaults to `200` (2%).
-</ParamField>
-
-```typescript
-const swap = await oneswap.swaps.createSwap({
-  userRef: 'user-1042',
-  inSymbol: 'CBTC',
-  amountIn: 0.01,
-  outSymbol: 'HTEST',
-  minOut: 0.95,
-  slippageBps: 100,
-})
-
-console.log(swap.id)           // 'esc_...'
-console.log(swap.status)       // 'awaiting_deposit'
-console.log(swap.depositParty) // the party the user must fund
-console.log(swap.deadline)     // ISO timestamp
-```
-
-Throws if `{ inSymbol, outSymbol }` has no visible pool (`no pool for IN/OUT`) or `OpenSwapExistsError` if the `userRef` already has an open swap. See [Error handling](/guides/error-handling).
-
-<Note>
-  `oneswap.escrow` — the 1.0.0 name for this namespace — still works as a deprecated alias of
-  the same instance.
-</Note>
-
-## `swaps.getSwap`
-
-Fetch the current state of a swap by id. Only returns swaps owned by your integrator.
-
-```typescript
-oneswap.swaps.getSwap(id: string): Promise<Swap>
-```
-
-<ParamField path="id" type="string" required>
-  The swap id returned by `createSwap` (`esc_...`).
-</ParamField>
-
-```typescript
-const swap = await oneswap.swaps.getSwap('esc_...')
-console.log(swap.status)
-```
-
-## `swaps.waitForSwap`
-
-Poll a swap until it reaches a terminal status (`returned`, `refunded`, `expired`, `failed`, or `cancelled`), or until the local timeout. Resolves with the final [`Swap`](/reference/types#swap).
-
-```typescript
-oneswap.swaps.waitForSwap(id: string, opts?: {
-  pollMs?: number
-  timeoutMs?: number
-}): Promise<Swap>
-```
-
-<ParamField path="id" type="string" required>
-  The swap id to wait on.
-</ParamField>
-
-<ParamField path="opts.pollMs" type="number" default="3000">
-  Poll interval in milliseconds.
-</ParamField>
-
-<ParamField path="opts.timeoutMs" type="number" default="900000">
-  Give up after this many milliseconds (default 15 minutes). On timeout the swap may still be
-  settling — resume with `getSwap(id)`.
-</ParamField>
-
-```typescript
-const done = await oneswap.swaps.waitForSwap('esc_...', {
-  pollMs: 3000,
-  timeoutMs: 900000,
-})
-
-if (done.status === 'returned') {
-  console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
-}
-```
-
-## `swaps.getOpenSwap`
-
-<Info>Added in SDK 1.2.0.</Info>
-
-Fetch the user's open (non-terminal) swap, or `null` if they have none.
-
-A `userRef` may hold only one open swap at a time — `createSwap` throws [`OpenSwapExistsError`](/guides/error-handling) while one is live. Use this to recover the swap id when you no longer have it: after a process restart, or when the `createSwap` response was lost in flight.
-
-```typescript
-oneswap.swaps.getOpenSwap(userRef: string): Promise<Swap | null>
-```
-
-<ParamField path="userRef" type="string" required>
-  Your stable identifier for the end user, the same value passed to `createSwap`.
-</ParamField>
-
-```typescript
-const open = await oneswap.swaps.getOpenSwap('user-123')
-
-if (open) {
-  console.log(`${open.id} is ${open.status}`)
-}
-```
-
-## `swaps.cancel`
-
-<Info>Added in SDK 1.2.0.</Info>
-
-Cancel a swap that has not yet received a deposit, freeing the user to start another immediately instead of waiting out the one-hour deposit deadline. Resolves with the closed [`Swap`](/reference/types#swap) (`status: 'cancelled'`).
-
-Only a swap still in `awaiting_deposit` can be cancelled. Once a deposit has arrived the swap holds funds and must run to completion — cancelling then throws `ConflictError` (409), and you should `waitForSwap` instead. Calling this on an already-finished swap returns it unchanged, so it is safe to retry.
-
-```typescript
-oneswap.swaps.cancel(id: string): Promise<Swap>
-```
-
-<ParamField path="id" type="string" required>
-  The swap id to cancel (`esc_...`).
-</ParamField>
-
-Together with `getOpenSwap`, this is how you recover from a blocked user:
-
-```typescript
-import { OpenSwapExistsError } from '@oneswap/sdk'
-
-try {
-  swap = await oneswap.swaps.createSwap({
-    userRef: 'user-123',
-    inSymbol: 'CC',
-    amountIn: 100,
-    outSymbol: 'CBTC',
-  })
-} catch (err) {
-  if (!(err instanceof OpenSwapExistsError)) throw err
-
-  const open = await oneswap.swaps.getOpenSwap('user-123')
-
-  if (open?.status === 'awaiting_deposit') {
-    await oneswap.swaps.cancel(open.id) // nothing was deposited — release and retry
-  } else if (open) {
-    await oneswap.swaps.waitForSwap(open.id) // funds are in flight — let it finish
-  }
-}
-```
-
-## `quotes.get`
-
-Quote a swap of `amount` `from`-tokens into `to`-tokens. The SDK resolves the pool that trades the pair (or takes `poolId` verbatim), derives the direction, and returns a [`QuoteResult`](/reference/types#quoteresult) — the quote plus the resolved `poolId` and `xToY`.
-
-```typescript
-oneswap.quotes.get(args: {
-  from: string
-  to: string
-  amount: number
-  poolId?: string
-  walletId?: string
-}): Promise<QuoteResult>
-```
-
-<ParamField path="from" type="string" required>
-  Symbol of the token you pay with, e.g. `'CC'`.
-</ParamField>
-
-<ParamField path="to" type="string" required>
-  Symbol of the token you receive, e.g. `'CBTC'`.
-</ParamField>
-
-<ParamField path="amount" type="number" required>
-  Amount of `from` to swap. Must be positive.
-</ParamField>
-
-<ParamField path="poolId" type="string">
-  Pin a specific pool instead of resolving one from the symbol pair. The pool must still trade
-  exactly `from`/`to`.
-</ParamField>
-
-<ParamField path="walletId" type="string">
-  A custodial wallet id you own — the quote then reports `walletBalanceIn` and
-  `sufficientBalance` for that wallet. Requires an authenticated session context, so most SDK
-  callers omit it.
-</ParamField>
-
-```typescript
-const quote = await oneswap.quotes.get({ from: 'CC', to: 'CBTC', amount: 100 })
-
-console.log(quote.amountOut)      // expected output in CBTC
-console.log(quote.priceImpactPct) // price impact of this trade size
-console.log(quote.effFeeBps)      // effective pool fee after any discount
-console.log(quote.networkFeeIn)   // network fee carved from the input
-console.log(quote.poolId)         // the pool the pair resolved to
-console.log(quote.xToY)           // direction within that pool
-```
-
-Throws [`NoDirectPoolError`](/guides/error-handling#the-no-direct-pool-case) when no pool trades the pair (there is no multi-hop routing) and `AmbiguousPoolPairError` (with `candidates`) when several do — retry with `poolId`. The pool list backing symbol resolution is cached for 30 seconds per client instance.
-
-<Note>
-  **Quotes made with your SDK key are settlement-accurate.** Because the SDK sends your
-  `x-sdk-key` on every request, the backend prices your quotes with the same fee model
-  `swaps.createSwap` settles with: the live per-swap network fee is carved from the input
-  (`networkFeeIn` &gt; 0, `effInput` = `amount` − `networkFeeIn`), so `amountOut` matches what
-  the swap actually returns (modulo price movement between quote and settlement). The response
-  reports this as `feeModel: 'deposit'`. Since the fee is roughly flat in USD per swap, it
-  dominates very small amounts — check `networkFeeIn` against `amount` before quoting tiny
-  swaps to users, and base `minOut` on this quote's `amountOut`.
-</Note>
-
-## `pools.list`
-
-All pools visible to the caller, with live reserves and fee configuration.
-
-```typescript
-oneswap.pools.list(): Promise<Pool[]>
-```
-
-```typescript
-const pools = await oneswap.pools.list()
-for (const p of pools) {
-  console.log(`${p.id}: ${p.assetX.symbol}/${p.assetY.symbol}`, p.reserveX, p.reserveY)
-}
-```
-
-## `pools.get`
-
-One pool plus its full settled-swap history.
-
-```typescript
-oneswap.pools.get(poolId: string): Promise<PoolDetail>  // { pool, swaps }
-```
-
-<ParamField path="poolId" type="string" required>
-  The pool id (`rt-...`), from `pools.list()` or a quote's `poolId`.
-</ParamField>
-
-```typescript
-const { pool, swaps } = await oneswap.pools.get('rt-...')
-console.log(pool.feeBps, swaps.length)
-```
-
-## `pools.getTicker`
-
-Live market data for a pool: USD price derived from the pool's own reserve ratio, 24h change, and 24h volume. Returns a [`PoolTicker`](/reference/types#poolticker). Cached up to 30s server-side.
-
-```typescript
-oneswap.pools.getTicker(poolId: string): Promise<PoolTicker>
-```
-
-<ParamField path="poolId" type="string" required>
-  The pool id (`rt-...`).
-</ParamField>
-
-```typescript
-const ticker = await oneswap.pools.getTicker('rt-...')
-
-console.log(ticker.pair)                 // 'CC/CBTC'
-console.log(ticker.base)                 // the asset being priced, e.g. 'CBTC'
-console.log(ticker.price.usd)            // e.g. '61462.225'
-console.log(ticker.priceChange24h.pct)   // e.g. '1.8342' — or null during warm-up
-console.log(ticker.volume24h.usd)        // 24h volume in USD
-console.log(ticker.volume24h.swaps)      // number of swaps in the window
-```
-
-`priceChange24h` fields are `null` until the pool's price history is at least 24h old, and `price.usd` is `null` for pools that cannot be USD-priced (e.g. unseeded pools).
-
-## `tokens.list`
-
-The tokens OneSwap can settle — display symbol plus the on-ledger instrument identity.
-
-```typescript
-oneswap.tokens.list(): Promise<Token[]>
-```
-
-```typescript
-const tokens = await oneswap.tokens.list()
-console.log(tokens.map((t) => t.symbol)) // ['CC', 'CBTC', ...]
-```
+## Session (custodial)
+
+| method | returns | description |
+|---|---|---|
+| `register(user, pass)` | `Account` | create an account + platform wallet; sets session |
+| `login(user, pass)` | `Account` | sign in; sets session + wallet |
+| `setSession(token)` | `this` | restore a persisted session token |
+| `session` | `string \| null` | current session token |
+| `me` | `Account \| null` | current account |
+| `walletId` | `string` | current wallet id (throws if not logged in) |
+| `refreshAccount()` | `Account` | repopulate account from the server |
+| `logout()` | `void` | clear session |
+
+## Market (public)
+
+| method | returns | description |
+|---|---|---|
+| `tokens()` | `Token[]` | listed tokens |
+| `config()` | `{ defaultPoolId, tokens }` | app config + default pool |
+| `pools()` | `Pool[]` | all visible pools |
+| `pool(poolId?)` | `Pool` | one pool (default if omitted) |
+| `poolId()` | `string` | the canonical/default pool id (cached) |
+| `quote(amountIn, xToY, poolId?)` | `Quote` | price a swap |
+| `rate()` | `{ rate, usdPerMb }` | live CC price / network-fee context |
+
+## Custodial wallet
+
+| method | returns | description |
+|---|---|---|
+| `balances()` | `Balance[]` | token balances |
+| `balance(symbol)` | `number` | one token balance |
+| `depositAddress()` | `string` | wallet party id — send tokens here |
+| `positions()` | `Position[]` | LP positions |
+| `deposit.offers()` | `Offer[]` | pending incoming deposits |
+| `deposit.acceptAll()` | `{ accepted }` | accept all deposits |
+| `deposit.accept(cid)` / `deposit.reject(cid)` | — | accept/reject one |
+| `traffic()` | `{ enabled, balance, ledger }` | prepaid CC traffic |
+| `topupTraffic(cc)` | `{ balance }` | add traffic credit |
+| `withdraw(symbol, amount, toParty)` | `{ … }` | send tokens to any party |
+
+## Trade + liquidity (custodial)
+
+| method | returns | description |
+|---|---|---|
+| `swap(amountIn, xToY, opts?)` | `SwapResult` | **atomic-DvP** swap |
+| `addLiquidity(x, y, opts?)` | `{ lpTokens, usedX, usedY }` | provide liquidity |
+| `removeLiquidity(lpTokens, opts?)` | `{ amountX, amountY }` | withdraw |
+
+`opts`: `{ slippageBps?, poolId?, idempotencyKey? }`.
+
+## Interactive (self-custody, cross-validator)
+
+All under `dex.interactive`:
+
+| method | returns | description |
+|---|---|---|
+| `createMandate(partyA, partyB, opts?)` | `{ mandateId }` | open a settlement mandate |
+| `quote(parties, mandateId, legs, issuerCount?)` | `Quote` | price interactive legs |
+| `prepare(parties, mandateId, legs)` | `Prepared` | build the unsigned atomic DvP |
+| `execute(prepared, signerOrSig)` | `SwapResult` | submit signature + settle |
+| `swap({ partyA, partyB, legs, signer, mandateId?, issuerCount? })` | `SwapResult` | one-shot mandate→prepare→sign→execute |
+
+`execute` accepts either a `WalletSigner` (it calls `signHash` for you) or a
+ready-made `Signature`.
+
+See [Types](/reference/types) for `Account`, `Pool`, `Quote`, `SwapResult`,
+`WalletSigner`, `Prepared`, `Leg`, and more.

@@ -1,0 +1,50 @@
+---
+title: "Custody models"
+description: "Custodial vs. self-custody — pick the right integration."
+---
+
+OneSwap v2 supports two custody models through **one** SDK. Both settle as
+[atomic DvP](/concepts/atomic-dvp); they differ only in who holds the signing key.
+
+## Custodial
+
+The platform provisions a wallet for each user and holds its key (encrypted at
+rest). The user authenticates with an account session; OneSwap signs on their
+behalf.
+
+- **Pros:** fastest to embed, no wallet UX, one-line swaps.
+- **Cons:** the platform custodies funds; users trust the deployment.
+- **Use when:** you're building an app that onboards users directly and wants the
+  simplest possible integration.
+
+```ts
+await dex.login('alice', 'pw');
+await dex.swap(1.0, true);
+```
+
+## Self-custody (interactive)
+
+The user keeps their own key, on **any** validator. OneSwap prepares the atomic
+DvP; the user's wallet signs its own leg; the operator co-signs; the ledger
+settles.
+
+- **Pros:** non-custodial — funds never leave the user's control before
+  settlement; works across validators.
+- **Cons:** the integrating wallet must be able to sign a transaction hash.
+- **Use when:** you're a **wallet** integrating OneSwap, or serving power users who
+  self-custody.
+
+```ts
+await dex.interactive.swap({ partyA, partyB, legs, signer });
+```
+
+## Choosing
+
+| Question | Custodial | Self-custody |
+|---|---|---|
+| Do your users have their own Canton key? | no | yes |
+| Are their parties on your validator? | yes | any validator |
+| Do you want zero wallet UX? | yes | no |
+| Must the user retain custody? | no | yes |
+
+You can offer **both** in the same product — the SDK is one class.

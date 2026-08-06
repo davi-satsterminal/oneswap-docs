@@ -1,0 +1,66 @@
+---
+title: "REST API"
+description: "The HTTP endpoints behind the SDK."
+---
+
+The SDK is a thin typed wrapper over these endpoints. Base URL is your OneSwap v2
+deployment (e.g. `https://api.oneswap.cc/swapv2`). Custodial calls send
+`Authorization: Bearer <session>`.
+
+## Accounts & session
+
+| method | path | body |
+|---|---|---|
+| POST | `/api/account/register` | `{ username, password }` |
+| POST | `/api/account/login` | `{ username, password }` |
+| GET | `/api/account/me` | — |
+
+## Market
+
+| method | path | notes |
+|---|---|---|
+| GET | `/api/rt/tokens` | listed tokens |
+| GET | `/api/rt/config` | default pool + tokens |
+| GET | `/api/rt/pools` | visible pools |
+| GET | `/api/rt/pool/:id` | one pool |
+| POST | `/api/rt/pool/:id/quote` | `{ amountIn, xToY }` |
+| GET | `/api/rate` | live CC price / $-per-MB |
+
+## Custodial wallet
+
+| method | path | body |
+|---|---|---|
+| GET | `/api/wallet/:id/rt-balances` | — |
+| GET | `/api/wallet/:id` | deposit address |
+| GET | `/api/wallet/:id/offers` | pending deposits |
+| POST | `/api/wallet/:id/offers/accept-all` | — |
+| GET | `/api/wallet/:id/positions` | LP positions |
+| POST | `/api/wallet/:id/withdraw` | `{ symbol, amount, toParty }` |
+| GET/POST | `/api/wallet/:id/traffic` `…/traffic/topup` | prepaid traffic |
+
+## Trade + liquidity (custodial, atomic DvP)
+
+| method | path | body |
+|---|---|---|
+| POST | `/api/rt/pool/:id/swap` | `{ walletId, amountIn, xToY, slippageBps, idempotencyKey? }` |
+| POST | `/api/rt/pool/:id/add-liquidity` | `{ walletId, amountX, amountY, idempotencyKey? }` |
+| POST | `/api/rt/pool/:id/remove-liquidity` | `{ walletId, lpTokens, idempotencyKey? }` |
+
+Every swap returns `{ updateId, amountOut, newReserveX, newReserveY, atomic: true, intentId }`.
+
+## Interactive (self-custody, cross-validator)
+
+| method | path | body |
+|---|---|---|
+| POST | `/api/mandate` | `{ partyA, partyB, maxAmountPerLeg?, expiryMs? }` |
+| POST | `/api/quote` | `{ parties, mandateId, legs, issuerCount? }` |
+| POST | `/api/prepare` | `{ parties, mandateId, legs }` → `{ preparedTransaction, preparedTransactionHash, … }` |
+| POST | `/api/execute` | `{ preparedTransaction, party, signature, publicKeyFingerprint }` |
+
+The trader signs `preparedTransactionHash` and submits the signature to
+`/api/execute`; the operator co-signs server-side and the ledger settles atomically.
+
+<Note>
+Interactive endpoints are gated on a self-hosted deployment — configure auth /
+`adminToken` per your deployment. The custodial endpoints are the public surface.
+</Note>

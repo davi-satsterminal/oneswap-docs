@@ -1,5 +1,5 @@
 {
-  "name": "OneSwap",
+  "name": "OneSwap v2",
   "favicon": "favicon.svg",
   "logo": {
     "light": "/logo-black.svg",
@@ -10,9 +10,6 @@
     "light": "#ECFDF5",
     "dark": "#0A0A0A"
   },
-  "css": [
-    "custom.css"
-  ],
   "navigation": [
     {
       "group": "Getting Started",
@@ -22,10 +19,19 @@
       ]
     },
     {
+      "group": "Concepts",
+      "pages": [
+        "concepts/atomic-dvp",
+        "concepts/custody-models",
+        "concepts/cross-validator"
+      ]
+    },
+    {
       "group": "Guides",
       "pages": [
-        "guides/swaps",
-        "guides/api-keys",
+        "guides/custodial-swaps",
+        "guides/interactive-swaps",
+        "guides/liquidity",
         "guides/error-handling"
       ]
     },
@@ -33,7 +39,8 @@
       "group": "Reference",
       "pages": [
         "reference/sdk-methods",
-        "reference/types"
+        "reference/types",
+        "reference/rest-api"
       ]
     }
   ]

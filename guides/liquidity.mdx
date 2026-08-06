@@ -1,0 +1,53 @@
+---
+title: "Liquidity"
+description: "Provide liquidity and earn fees."
+---
+
+Liquidity providers deposit both assets of a pool and receive LP tokens
+representing their share. Swap fees accrue to the pool, growing every LP's value.
+
+## Add liquidity
+
+```ts
+// amounts of assetX and assetY; the first provider sets the price
+const { lpTokens, usedX, usedY } = await dex.addLiquidity(1.0, 1000);
+```
+
+After the first deposit, amounts must match the pool ratio — the pool uses the
+values proportionally and returns what it actually consumed in `usedX` / `usedY`.
+
+## Check your position
+
+```ts
+const positions = await dex.positions();
+// [{ poolId, lpTokens, sharePct, valueX, valueY, assetX, assetY }]
+```
+
+## Remove liquidity
+
+Burn LP tokens to withdraw your share of both reserves:
+
+```ts
+const pos = (await dex.positions())[0];
+const { amountX, amountY } = await dex.removeLiquidity(pos.lpTokens);
+```
+
+## Fee split
+
+Each swap charges a fee (basis points, per pool). It is split between:
+
+- **LP share** — stays in the pool reserve, increasing every LP's value.
+- **Platform share** — accrues to an off-reserve accumulator, collected to the
+  treasury by the operator.
+
+Pool discovery exposes the current split and fee:
+
+```ts
+const p = await dex.pool();
+// p.feeBps, p.lpFeeShare, p.platformFeeShare, p.reserveX, p.reserveY
+```
+
+<Note>
+Liquidity operations are idempotent — pass an `idempotencyKey` to make retries
+safe, exactly like swaps.
+</Note>

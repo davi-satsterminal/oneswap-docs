@@ -1,0 +1,73 @@
+---
+title: "Custodial swaps"
+description: "Embed OneSwap with platform-held wallets."
+---
+
+The custodial flow provisions a wallet per user and signs on their behalf — the
+fastest way to embed OneSwap. Swaps still settle as [atomic DvP](/concepts/atomic-dvp).
+
+## Account + wallet
+
+One username = one account, with one platform wallet.
+
+```ts
+import { OneSwapV2 } from 'oneswap-v2-sdk';
+const dex = new OneSwapV2('https://api.oneswap.cc/swapv2');
+
+await dex.register('alice', 'a-strong-password');  // or dex.login(...)
+// persist dex.session and restore later with new OneSwapV2(url, { session })
+```
+
+## Fund the wallet
+
+Send CIP-56 tokens to the wallet's Canton party, then accept the incoming offers.
+
+```ts
+const address = await dex.depositAddress();   // the wallet's party id
+// … send tokens to `address` from any Canton wallet …
+await dex.deposit.acceptAll();
+console.log(await dex.balances());            // [{ instrumentId, amount, locked }]
+```
+
+## Quote + swap
+
+```ts
+const q = await dex.quote(1.0, true);         // xToY = assetX → assetY
+// q.amountOut, q.priceImpactPct, q.networkFeeIn
+
+const res = await dex.swap(1.0, true, {
+  slippageBps: 100,            // 1% max slippage (default 200)
+  idempotencyKey: 'order-42',  // safe to retry
+});
+// res.atomic === true, res.updateId, res.amountOut
+```
+
+Target a non-default pool with `{ poolId }`:
+
+```ts
+const pools = await dex.pools();
+await dex.swap(1.0, true, { poolId: pools[0].id });
+```
+
+## Network fee (prepaid CC traffic)
+
+Swaps consume Canton traffic. Check and top up the wallet's prepaid balance:
+
+```ts
+console.log(await dex.traffic());       // { enabled, balance, ledger }
+await dex.topupTraffic(10);             // add 10 CC of traffic credit
+```
+
+## Withdraw
+
+Send tokens from the custodial wallet to any external Canton party:
+
+```ts
+await dex.withdraw('cETH', 0.5, 'bob::1220…');
+```
+
+## Security model
+
+The platform holds the wallet key (encrypted at rest) and signs on the user's
+behalf. Users trust the deployment. For **non-custodial** integration where the
+user keeps their key, use [Interactive swaps](/guides/interactive-swaps).

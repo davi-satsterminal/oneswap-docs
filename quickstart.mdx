@@ -1,179 +1,86 @@
 ---
 title: "Quickstart"
-description: "Quote and run your first swap in under 5 minutes."
+description: "Install the SDK and swap — custodial and self-custody."
 ---
 
-This walks you through one complete swap: quote it, create it, hand your user a deposit party, and wait for the output to be returned to them.
+## Install
 
-<Steps>
-  <Step title="Install the SDK">
-    ```bash
-    npm install @oneswap/sdk
-    ```
-  </Step>
-
-  <Step title="Create an API key">
-    Create an SDK key from your OneSwap account (self-serve) —
-    [swap.oneswap.cc](https://swap.oneswap.cc) for mainnet,
-    [devnet.oneswap.cc](https://devnet.oneswap.cc) for devnet. The key looks like
-    `sk_live_` followed by 48 hex characters and is shown **once** at creation — store it
-    somewhere safe. See [API keys](/guides/api-keys) for the full flow.
-
-    Keep the key on your **server only**. It is your integrator credential; never ship it to a
-    browser or to an end-user.
-  </Step>
-
-  <Step title="Initialize the client">
-    ```typescript
-    import { OneSwap } from '@oneswap/sdk'
-
-    const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
-    ```
-
-    The client sends your key on every request as the `x-sdk-key` header. It talks to
-    **mainnet** by default; pass `environment: 'devnet'` to use the devnet backend — the SDK
-    resolves the URL itself, so you never set one:
-
-    ```typescript
-    const oneswap = new OneSwap({
-      apiKey: 'sk_live_...',
-      environment: 'devnet', // 'mainnet' (default) | 'devnet'
-    })
-    ```
-  </Step>
-
-  <Step title="Quote the swap">
-    Before creating anything, ask what the swap would return. The SDK finds the pool that
-    trades the pair and derives the direction for you:
-
-    ```typescript
-    const quote = await oneswap.quotes.get({
-      from: 'CBTC',   // token the user pays with
-      to: 'HTEST',    // token the user receives
-      amount: 0.01,   // amount of `from` to swap
-    })
-
-    console.log(quote.amountOut)      // expected output, before it moves
-    console.log(quote.priceImpactPct) // price impact of this trade size
-    console.log(quote.poolId)         // the pool the pair resolved to
-    ```
-
-    If no pool trades the pair directly, this throws `NoDirectPoolError` — route through an
-    intermediate asset (usually CC) as two separate swaps.
-  </Step>
-
-  <Step title="Create the swap">
-    ```typescript
-    const swap = await oneswap.swaps.createSwap({
-      userRef: 'user-1042', // your stable id for this end-user
-      inSymbol: 'CBTC',      // token the user deposits
-      amountIn: 0.01,        // amount of inSymbol to swap
-      outSymbol: 'HTEST',    // token to return to the user
-    })
-
-    console.log(swap.id)           // 'esc_...'
-    console.log(swap.status)       // 'awaiting_deposit'
-    console.log(swap.depositParty) // the Canton party the user must fund
-    console.log(swap.deadline)     // ISO timestamp — deposit before this
-    ```
-
-    Only one open swap is allowed per `userRef` at a time.
-  </Step>
-
-  <Step title="Show the user the deposit party">
-    Tell your end-user to send **`amountIn` of `inSymbol`** (here, `0.01 CBTC`) to
-    `swap.depositParty` before `swap.deadline` (60 minutes from creation).
-
-    The deposit must land within **1%** of `amountIn`, or it is refunded. OneSwap never guesses
-    intent from a wrong amount.
-  </Step>
-
-  <Step title="Wait for completion">
-    ```typescript
-    const done = await oneswap.swaps.waitForSwap(swap.id)
-
-    if (done.status === 'returned') {
-      // Success — output was paid back to the party that funded the swap
-      console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
-    } else {
-      // refunded | expired | failed
-      console.log(`Swap ended as ${done.status}`, done.error)
-    }
-    ```
-
-    `waitForSwap` resolves once the swap reaches a terminal status
-    (`returned`, `refunded`, `expired`, or `failed`), or when its local timeout is hit.
-  </Step>
-</Steps>
-
-## Complete example
-
-```typescript
-import { OneSwap } from '@oneswap/sdk'
-
-const oneswap = new OneSwap({ apiKey: 'sk_live_...' })
-
-async function swapForUser() {
-  // 1. Quote it first
-  const quote = await oneswap.quotes.get({ from: 'CBTC', to: 'HTEST', amount: 0.01 })
-  console.log(`Expecting ~${quote.amountOut} HTEST (impact ${quote.priceImpactPct}%)`)
-
-  // 2. Create the swap
-  const swap = await oneswap.swaps.createSwap({
-    userRef: 'user-1042',
-    inSymbol: 'CBTC',
-    amountIn: 0.01,
-    outSymbol: 'HTEST',
-  })
-
-  // 3. Show your end-user where to send the deposit
-  console.log(`Send ${swap.amountIn} ${swap.inSymbol} to ${swap.depositParty}`)
-  console.log(`Deposit before ${swap.deadline}`)
-
-  // 4. Wait for OneSwap to detect, swap, and return the output
-  const done = await oneswap.swaps.waitForSwap(swap.id)
-
-  if (done.status === 'returned') {
-    console.log(`Done — returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
-  } else {
-    console.log(`Swap ended as ${done.status}`, done.error)
-  }
-}
-
-swapForUser()
+```bash
+npm install oneswap-v2-sdk
 ```
 
-## Reading the market
+Self-contained: uses global `fetch` (Node 18+ or any modern browser). Point it at
+a OneSwap v2 deployment:
 
-The same client reads pools, tickers, and tokens — useful for building your own token pickers
-and price displays:
-
-```typescript
-const tokens = await oneswap.tokens.list()   // what can be swapped
-const pools = await oneswap.pools.list()     // every visible pool, with live reserves
-
-// Live market data for the pool your quote resolved to
-const ticker = await oneswap.pools.getTicker(quote.poolId)
-console.log(`${ticker.pair}: $${ticker.price.usd} (${ticker.priceChange24h.pct ?? '—'}% 24h)`)
-console.log(`24h volume: $${ticker.volume24h.usd} across ${ticker.volume24h.swaps} swaps`)
+```ts
+import { OneSwapV2 } from 'oneswap-v2-sdk';
+const dex = new OneSwapV2('https://api.oneswap.cc/swapv2');
 ```
 
-`priceChange24h` fields are `null` while the price history is warming up (the first 24h after a
-pool starts being tracked).
+## Custodial: swap in 4 lines
 
-## What's next
+The platform provisions a wallet for your user and signs on their behalf.
 
-<CardGroup cols={2}>
-  <Card title="Swaps guide" icon="arrow-right-arrow-left" href="/guides/swaps">
-    Lifecycle, tolerances, min-out, and reconciliation
-  </Card>
-  <Card title="API keys" icon="key" href="/guides/api-keys">
-    Create, rotate, and revoke keys safely
-  </Card>
-  <Card title="Error handling" icon="triangle-exclamation" href="/guides/error-handling">
-    Typed errors, refunds, expiries, and robust polling
-  </Card>
-  <Card title="SDK methods" icon="code" href="/reference/sdk-methods">
-    The full client surface
-  </Card>
-</CardGroup>
+```ts
+await dex.register('alice', 'a-strong-password');   // or dex.login(...)
+console.log('deposit to:', await dex.depositAddress());
+await dex.deposit.acceptAll();                       // accept incoming CIP-56 tokens
+
+const q = await dex.quote(1.0, true);                // xToY = assetX → assetY
+const res = await dex.swap(1.0, true, { slippageBps: 100 });
+console.log('atomic:', res.atomic, 'tx:', res.updateId, 'out:', res.amountOut);
+```
+
+<Note>
+`res.atomic` is always `true` — v2 only settles atomic DvP. `res.updateId` is the
+Canton transaction id you can look up on a scan explorer.
+</Note>
+
+## Interactive: swap from a self-custody wallet on any validator
+
+Your user keeps their own key. Implement a `WalletSigner` over their wallet, and
+OneSwap builds the atomic DvP for them to sign.
+
+```ts
+import { OneSwapV2, WalletSigner } from 'oneswap-v2-sdk';
+const dex = new OneSwapV2('https://api.oneswap.cc/swapv2');
+
+const wallet: WalletSigner = {
+  party: 'alice::1220ab…',                        // user party on ANY validator
+  publicKeyFingerprint: '1220ef…',
+  signHash: (hash) => myWallet.signEd25519(hash), // base64/hex Ed25519 signature
+};
+
+const res = await dex.interactive.swap({
+  partyA: wallet.party,
+  partyB: operatorParty,
+  legs: [{ sender: wallet.party, receiver: poolParty, instrumentId: { admin, id: 'cETH' }, amount: '1.0' }],
+  signer: wallet,
+});
+console.log('settled:', res.updateId);
+```
+
+The user's key never leaves their side, and the swap settles all-or-nothing.
+
+## Provide liquidity
+
+```ts
+await dex.addLiquidity(1.0, 1000);                  // amounts of assetX / assetY
+console.log(await dex.positions());                 // [{ lpTokens, sharePct, valueX, valueY }]
+const pos = (await dex.positions())[0];
+await dex.removeLiquidity(pos.lpTokens);
+```
+
+## Persist a session
+
+```ts
+const token = dex.session;                          // store it
+const dex2 = new OneSwapV2(url, { session: token });
+await dex2.refreshAccount();
+```
+
+## Where to next
+
+- [Interactive swaps](/guides/interactive-swaps) — full cross-validator integration.
+- [Atomic DvP](/concepts/atomic-dvp) — the settlement guarantee.
+- [SDK reference](/reference/sdk-methods) — every method.

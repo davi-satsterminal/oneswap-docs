@@ -1,0 +1,100 @@
+---
+title: "Interactive swaps (self-custody)"
+description: "Integrate a wallet on any validator — the user signs their own leg."
+---
+
+This is the path a **wallet integrates** to let its users swap on OneSwap without
+giving up custody, from **any** validator. OneSwap builds the atomic DvP, the
+wallet signs its own leg, the operator co-signs, and the ledger settles
+all-or-nothing.
+
+## 1. Implement a `WalletSigner`
+
+The only thing OneSwap needs from your wallet is the party, its key fingerprint,
+and a function that signs a transaction hash.
+
+```ts
+import { WalletSigner } from 'oneswap-v2-sdk';
+
+const wallet: WalletSigner = {
+  party: 'alice::1220ab…',                 // the user's party (any validator)
+  publicKeyFingerprint: '1220ef…',         // their key fingerprint
+  signHash: async (hash) => {
+    // sign the base64/hex prepared-transaction hash with the user's Ed25519 key
+    return myWallet.signEd25519(hash);     // return base64 or hex
+  },
+};
+```
+
+## 2. One-shot swap
+
+```ts
+import { OneSwapV2 } from 'oneswap-v2-sdk';
+const dex = new OneSwapV2('https://api.oneswap.cc/swapv2');
+
+const res = await dex.interactive.swap({
+  partyA: wallet.party,          // trader
+  partyB: operatorParty,         // OneSwap operator/pool
+  legs: [
+    { sender: wallet.party, receiver: poolParty, instrumentId: { admin, id: 'cETH' }, amount: '1.0' },
+  ],
+  signer: wallet,
+});
+console.log('settled tx:', res.updateId, 'out:', res.amountOut);
+```
+
+Under the hood this does: `createMandate` → `prepare` → your wallet signs →
+`execute`. Nothing moves until execute, and then every leg settles or none do.
+
+## 3. Or drive each step (full control)
+
+Useful when your wallet UX needs to show the user the exact transaction before
+signing.
+
+```ts
+const parties = { partyA: wallet.party, partyB: operatorParty };
+
+// open a settlement mandate
+const { mandateId } = await dex.interactive.createMandate(wallet.party, operatorParty);
+
+// price it
+const quote = await dex.interactive.quote(parties, mandateId, legs);
+
+// build the unsigned atomic DvP
+const prepared = await dex.interactive.prepare(parties, mandateId, legs);
+
+// SIGN on your side — the key never touches OneSwap
+const signature = await wallet.signHash(prepared.preparedTransactionHash);
+
+// submit the signature; the operator co-signs; the ledger settles atomically
+const res = await dex.interactive.execute(prepared, {
+  party: wallet.party,
+  signature,
+  publicKeyFingerprint: wallet.publicKeyFingerprint,
+});
+```
+
+## What the user is signing
+
+`preparedTransactionHash` is the hash of the atomic DvP transaction. By signing it,
+the user authorizes **only their own input leg** — the operator authorizes the pool
+output and network fee. The registry's `Allocation_ExecuteTransfer` enforces the
+exchange, so a valid signature can only ever result in the quoted swap.
+
+## Requirements
+
+- The user's party must share a **synchronizer** with the OneSwap pool.
+- Tokens must be CIP-56 instruments with allocation support (all listed tokens).
+- The operator's co-signing key is configured server-side — your wallet never
+  needs it.
+
+<Warning>
+Always show the user the `quote` (amount out, price impact, fee) before they sign.
+Once `execute` runs, the swap is final and atomic.
+</Warning>
+
+## See also
+
+- [Cross-validator swaps](/concepts/cross-validator) — the architecture.
+- [Error handling](/guides/error-handling) — failures & refunds.
+- [Types](/reference/types) — `WalletSigner`, `Prepared`, `Leg`, `Signature`.

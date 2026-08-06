@@ -1,194 +1,68 @@
 ---
 title: "Error handling"
-description: "Typed SDK errors, terminal statuses, and how to handle both safely."
+description: "Failures, refunds, retries, and idempotency."
 ---
 
-Failures come in two shapes:
+Because v2 settles as [atomic DvP](/concepts/atomic-dvp), failure handling is
+simple: a swap either fully settles or nothing moves. The SDK throws on failure and
+the trader's balance is unchanged.
 
-1. **Thrown errors** — the SDK throws a typed error (every class extends `OneSwapError`). These happen at call time (`swaps.createSwap`, `quotes.get`, …) — for example a pair with no pool, an already-open swap, an invalid key, or a rate limit.
-2. **Terminal statuses** — the swap is created successfully but ends in a non-success terminal state (`refunded`, `expired`, `failed`). You read these off the swap's `status`, not from a thrown error.
+## Errors throw
 
-Because swaps are **atomic DvP**, a swap that does not complete has its input **refunded** — funds are never stranded by a partial swap.
+Every SDK call rejects with an `Error` whose message carries the reason:
 
-## Typed errors
-
-Every error extends `OneSwapError`, which carries an optional `status` (HTTP status code) and `data` (the parsed response body). Catch by class with `instanceof`:
-
-```typescript
-import {
-  OneSwap,
-  OpenSwapExistsError,
-  NoDirectPoolError,
-  RateLimitError,
-  AuthError,
-} from '@oneswap/sdk'
-
+```ts
 try {
-  const swap = await oneswap.swaps.createSwap({
-    userRef: 'user-1042',
-    inSymbol: 'CBTC',
-    amountIn: 0.01,
-    outSymbol: 'HTEST',
-  })
-} catch (err) {
-  if (err instanceof OpenSwapExistsError) {
-    // this user already has an open swap — resume it instead
-  } else if (err instanceof RateLimitError) {
-    // back off and retry
-  } else {
-    throw err
+  await dex.swap(1.0, true, { slippageBps: 50 });
+} catch (e) {
+  console.error(e.message); // e.g. "…/swap: slippage"
+}
+```
+
+Common messages:
+
+| Message | Meaning |
+|---|---|
+| `slippage` | Quote moved beyond your `slippageBps` — re-quote and retry. |
+| `amount too small: rounds to zero output` | Input too small for the pool's precision. |
+| `insufficient …` | Not enough balance / unlocked holdings. |
+| `pool not found` | Bad `poolId`. |
+| `not logged in …` | Call `register()` / `login()` / `setSession()` first. |
+
+## Atomic failure = automatic refund
+
+If the on-ledger execute fails, OneSwap withdraws the trader's allocation
+server-side — the locked funds return automatically. There is **no** partial state
+to clean up. The call throws; the trader's balance is exactly as before.
+
+The only ambiguous case (a lost `execute` response) is resolved from the trader's
+on-ledger output balance, never guessed — so you never get a double-pay or a
+silent loss.
+
+## Idempotency (safe retries)
+
+Pass an `idempotencyKey` to any fund-moving call. A retry with the same key returns
+the original result instead of executing twice — the correct way to handle network
+timeouts:
+
+```ts
+const key = 'swap-' + orderId;
+async function swapWithRetry() {
+  for (let i = 0; i < 3; i++) {
+    try { return await dex.swap(1.0, true, { idempotencyKey: key }); }
+    catch (e) { if (i === 2) throw e; await new Promise(r => setTimeout(r, 1000)); }
   }
 }
 ```
 
-| Class | HTTP | When | What to do |
-|---|---|---|---|
-| `OpenSwapExistsError` | `409` | `createSwap` for a `userRef` that already has an open (non-terminal) swap | Call `getOpenSwap(userRef)`, then `cancel` it if no deposit arrived, or resume it if one did |
-| `ConflictError` | `409` | `cancel` on a swap that already holds funds | Don't retry the cancel — `waitForSwap` on it instead |
-| `NoDirectPoolError` | — | `quotes.get` for a pair no pool trades directly (`createSwap` errors similarly with `no pool for IN/OUT`) | Route through an intermediate asset (usually CC) as two separate swaps |
-| `AmbiguousPoolPairError` | — | `quotes.get` for a pair that several pools trade; carries `candidates` | Retry with `poolId` set to one of the candidates |
-| `ValidationError` | `400` | Bad arguments (missing symbols, non-positive amount, mismatched `poolId`) | Fix the request |
-| `AuthError` | `401` | The API key is missing, malformed, or revoked | Check the key and mint a new one if needed |
-| `NotFoundError` | `404` | Unknown swap id or pool id | Check the id |
-| `RateLimitError` | `429` | Too many requests for the key's per-minute tier | Back off and retry (see below) |
-| `ServerError` | `5xx` | The API failed to process the request | Retry with backoff; contact OneSwap if persistent |
-| `NetworkError` / `TimeoutError` | — | The request never completed (connection failure / local timeout) | Retry; the operation may or may not have happened — reads are safe to repeat |
+The same key never double-swaps — the second call returns the first result.
 
-## Terminal statuses
+## Interactive-flow errors
 
-A created swap always reaches one of these terminal statuses. Read `status` (and `amountOut` / `senderParty` / `error`) off the swap:
+For [interactive swaps](/guides/interactive-swaps):
 
-| Status | Meaning | What to do |
-|---|---|---|
-| `returned` | **Success** — `amountOut` of `outSymbol` was returned to `senderParty` | Record the payout |
-| `refunded` | Deposit amount was outside the **1%** tolerance, or output was below `minOut` — the input was returned to the sender | Tell the user; they can try again with the exact amount or a lower `minOut` |
-| `expired` | No deposit arrived before `deadline` (60 minutes) — nothing happened | Create a fresh swap if the user still wants to trade |
-| `cancelled` | Closed via `cancel()` before any deposit arrived — nothing happened | Create a fresh swap if the user still wants to trade |
-| `failed` | An unexpected error (rare); `error` is set | Inspect `error`; the input is refunded by the atomic guarantee |
-
-## The "already has an open swap" case
-
-Only one open swap per `userRef` is allowed. When you hit this, don't create a duplicate — ask for the open swap and act on it. You don't need to have stored the id: `getOpenSwap` finds it for you.
-
-```typescript
-import { OpenSwapExistsError } from '@oneswap/sdk'
-
-async function createOrResume(args) {
-  try {
-    return await oneswap.swaps.createSwap(args)
-  } catch (err) {
-    if (!(err instanceof OpenSwapExistsError)) throw err
-
-    const open = await oneswap.swaps.getOpenSwap(args.userRef)
-    if (!open) return oneswap.swaps.createSwap(args) // it finished in the meantime
-
-    // No deposit yet? Release it and start the swap the user actually asked for.
-    if (open.status === 'awaiting_deposit') {
-      await oneswap.swaps.cancel(open.id)
-      return oneswap.swaps.createSwap(args)
-    }
-
-    // A deposit is in flight — that swap must run to completion. Resume it.
-    return open
-  }
-}
-```
-
-<Warning>
-  `cancel` only closes a swap still in `awaiting_deposit`. Once a deposit has arrived the swap
-  holds the user's funds and must run to completion — cancelling then throws `ConflictError`
-  (409). Never treat that 409 as a reason to retry `createSwap`; wait on the existing swap with
-  `waitForSwap` instead.
-</Warning>
-
-Store `swap.id` against your `userRef` at creation so you can always find the open swap again.
-
-## The "no direct pool" case
-
-Every swap settles against one pool, and there is no multi-hop routing. `quotes.get` throws
-`NoDirectPoolError` when no pool trades the pair — the error tells you both symbols so you can
-route through an intermediate asset yourself:
-
-```typescript
-import { NoDirectPoolError } from '@oneswap/sdk'
-
-try {
-  await oneswap.quotes.get({ from: 'HANDL', to: 'EDELx', amount: 100 })
-} catch (err) {
-  if (err instanceof NoDirectPoolError) {
-    // No HANDL/EDELx pool. Two swaps instead: HANDL→CC, then CC→EDELx —
-    // two settlements, two network fees, and the price can move between legs.
-  }
-}
-```
-
-## Rate limits
-
-Requests beyond a key's per-minute tier throw `RateLimitError` (`429`). Create is the tightest tier; polling and reads are looser. Back off and retry:
-
-```typescript
-import { RateLimitError } from '@oneswap/sdk'
-
-async function pollWithBackoff(id: string) {
-  let delay = 3000
-  for (;;) {
-    try {
-      return await oneswap.swaps.getSwap(id)
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        await new Promise((r) => setTimeout(r, delay))
-        delay = Math.min(delay * 2, 30000)
-        continue
-      }
-      throw err
-    }
-  }
-}
-```
-
-Prefer `waitForSwap` (or a fixed poll interval) over tight polling loops so you stay under the limit.
-
-## A robust create-and-wait pattern
-
-```typescript
-async function runSwap() {
-  let swap
-  try {
-    swap = await oneswap.swaps.createSwap({
-      userRef: 'user-1042',
-      inSymbol: 'CBTC',
-      amountIn: 0.01,
-      outSymbol: 'HTEST',
-    })
-  } catch (err) {
-    // Bad pair, already-open swap, auth, or rate limit — no swap was created.
-    console.error('Could not create swap:', (err as Error).message)
-    return
-  }
-
-  // Show the user where to deposit.
-  console.log(`Send ${swap.amountIn} ${swap.inSymbol} to ${swap.depositParty} before ${swap.deadline}`)
-
-  const done = await oneswap.swaps.waitForSwap(swap.id)
-
-  switch (done.status) {
-    case 'returned':
-      console.log(`Returned ${done.amountOut} ${done.outSymbol} to ${done.senderParty}`)
-      break
-    case 'refunded':
-      console.log('Refunded — amount outside tolerance or below minOut. Input returned to sender.')
-      break
-    case 'expired':
-      console.log('No deposit arrived before the deadline. Nothing happened.')
-      break
-    case 'failed':
-      console.log('Unexpected failure:', done.error, '— input is refunded by the atomic guarantee.')
-      break
-  }
-}
-```
-
-<Note>
-  If `waitForSwap` times out while a swap is still non-terminal, the swap may still settle. Resume
-  with `getSwap(id)` rather than treating it as failed.
-</Note>
+- If the user's signature is invalid or the quote moved, `execute` throws — nothing
+  settled.
+- If the user never calls `execute`, nothing is committed; any allocation created
+  during `prepare` is released.
+- Always show the `quote` before signing so users aren't surprised by price impact.
