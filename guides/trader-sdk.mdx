@@ -3,87 +3,32 @@ title: "Trader SDK"
 description: "Quote and trade a OneSwap wallet with an administrator-issued Trader SDK key."
 ---
 
-The Trader SDK lets an existing OneSwap account trade its own wallet over HTTP. It is separate
-from the [integrator SDK](/introduction): an integrator key creates deposit-and-return swaps for
-other users, while a trader key can move funds only from the wallet bound to that key.
+The Trader SDK lets an approved OneSwap account trade its own wallet from a server-side
+application. It is separate from the integrator SDK: a trader key is bound to one existing
+wallet and cannot onboard users or withdraw funds.
 
-The mainnet API base is:
-
-```text
-https://api.oneswap.cc/swapv2
-```
-
-Install the typed TypeScript client for a backend service or trading bot:
+## Install
 
 ```bash
 npm install @oneswap/trader-sdk
 ```
 
-## Access model
+## Get a trader key
 
-Trader SDK access is provisioned by the OneSwap team. A trader cannot activate Trader SDK
-access or create a key. To get access, send OneSwap the account and wallet you want to trade;
-an administrator will approve the account and issue a wallet-bound `tk_live_...` key.
+A OneSwap administrator enables Trader SDK access and issues a key for the approved account
+and wallet. A trader cannot enable access, create a key, change its wallet binding, or enable
+three-token fees through the SDK. Contact OneSwap when you need a new or replacement key.
 
-Access remains fail-closed: the issued key, its account, its bound wallet, and the requested
-market must all remain approved. OneSwap can revoke the key or account access immediately.
+The key, account, bound wallet, and requested pool must all remain approved. OneSwap can revoke
+access immediately.
 
-A trader key never accepts a client-supplied `walletId`. The backend resolves its bound wallet
-from the key and rechecks ownership on every request.
+<Warning>
+  A trader key can execute trades with real wallet funds. Keep it in a server-side secret
+  manager. Never embed it in a website, browser extension, mobile app, repository, log, or
+  analytics event. Ask OneSwap to revoke and replace an exposed key.
+</Warning>
 
-## Receive your key
-
-OneSwap sends the issued `tk_live_...` key to the approved trader through an agreed secure
-channel. Store it immediately and send it as `x-trader-key` on Trader SDK requests. If you
-lose or expose it, ask OneSwap to revoke it and issue a replacement.
-
-## List pools and balances
-
-```bash
-curl 'https://api.oneswap.cc/swapv2/api/trader/pools' \
-  -H 'x-trader-key: tk_live_...'
-
-curl 'https://api.oneswap.cc/swapv2/api/trader/balances' \
-  -H 'x-trader-key: tk_live_...'
-```
-
-## Quote and swap
-
-Quote before every swap. `xToY: true` pays with the pool's `assetX`; `false` pays with
-`assetY`.
-
-```bash
-curl -X POST 'https://api.oneswap.cc/swapv2/api/trader/quote' \
-  -H 'content-type: application/json' \
-  -H 'x-trader-key: tk_live_...' \
-  -d '{
-    "poolId":"rt-...",
-    "amountIn":100,
-    "xToY":true,
-    "feeMode":"prepaid"
-  }'
-```
-
-Then submit the swap with a unique idempotency key and a minimum output derived from the quote:
-
-```bash
-curl -X POST 'https://api.oneswap.cc/swapv2/api/trader/swap' \
-  -H 'content-type: application/json' \
-  -H 'x-trader-key: tk_live_...' \
-  -H 'idempotency-key: order-1042' \
-  -d '{
-    "poolId":"rt-...",
-    "amountIn":100,
-    "xToY":true,
-    "minAmountOut":9.9,
-    "slippageBps":100,
-    "feeMode":"prepaid"
-  }'
-```
-
-Omitting `feeMode` is equivalent to `"prepaid"` and preserves the ordinary fee path.
-
-With the TypeScript SDK, the same flow is:
+## Create the client
 
 ```ts
 import { TraderSDK } from '@oneswap/trader-sdk'
@@ -92,119 +37,109 @@ const trader = new TraderSDK({
   apiKey: process.env.ONESWAP_TRADER_KEY!,
   environment: 'mainnet',
 })
+```
 
+The wallet is resolved from the administrator-issued key, so SDK methods do not accept a
+`walletId`. Self-custody wallets also require an active OneSwap user mandate; the trader key
+never contains or replaces the self-custody key.
+
+## Discover pools, tokens, and balances
+
+```ts
+const pools = await trader.pools()
+const tokens = await trader.tokens()
+const balances = await trader.balances()
+
+const pool = pools.find((candidate) => candidate.id === 'rt-...')
+if (!pool) throw new Error('Pool is unavailable to this trader')
+```
+
+A pool has an ordered pair of assets. `xToY: true` spends `assetX` and receives `assetY`;
+`false` reverses the direction.
+
+## Quote and swap
+
+Quote immediately before a swap and use the quote to set the output floor:
+
+```ts
 const quote = await trader.quote({
-  poolId: 'rt-...',
+  poolId: pool.id,
   amountIn: 100,
   xToY: true,
   feeMode: 'prepaid',
 })
 
-if (quote.sufficientFunds) {
+if (!quote.sufficientFunds) throw new Error('Insufficient spendable balance')
+
+const result = await trader.swap({
+  poolId: pool.id,
+  amountIn: 100,
+  xToY: true,
+  minAmountOut: quote.amountOut * 0.99,
+  feeMode: quote.feeMode,
+  idempotencyKey: 'order-1042',
+})
+```
+
+Use a unique `idempotencyKey` for each intended swap. Reuse it only when retrying that exact
+swap, so a timeout or process restart cannot execute the order twice.
+
+## Three-token network fees
+
+When a OneSwap administrator has enabled the trader and configured a distinct fee instrument
+for a synchronous atomic pool, select it explicitly on both calls:
+
+```ts
+const tokenFeeQuote = await trader.quote({
+  poolId: pool.id,
+  amountIn: 100,
+  xToY: true,
+  feeMode: 'token',
+})
+
+if (tokenFeeQuote.sufficientFunds) {
   await trader.swap({
-    poolId: 'rt-...',
+    poolId: pool.id,
     amountIn: 100,
     xToY: true,
-    minAmountOut: quote.amountOut * 0.99,
-    feeMode: 'prepaid',
-    idempotencyKey: 'order-1042',
+    minAmountOut: tokenFeeQuote.amountOut * 0.99,
+    feeMode: 'token',
+    idempotencyKey: 'order-1043',
   })
 }
 ```
 
-Keep a trader key on a server you control. It can execute trades with real wallet funds and
-must never be embedded in a browser or mobile application.
+For Trader SDK quotes, `tokenFee.amount` is derived from the live Canton traffic cost,
+including the extra fee-token allocation. OneSwap subtracts measured reward recovery,
+applies the best applicable global, pool, account, or wallet network-fee promotion, and then
+converts CC → USDCx → the configured fee token at live prices.
 
-## Three-token fees
-
-A trader may explicitly select a third-token network fee by sending `"feeMode":"token"`.
-This selection works only when OneSwap has enabled it for both the trader and the requested
-market. The trader cannot enable or reconfigure this capability through the SDK.
-
-When it is available, send `feeMode: "token"` to both quote and swap. The quote returns the
-fee token, final fee amount, and balance checks. If it is not available, the request fails
-without changing the market's fee configuration.
-
-The configured fee instrument must differ from both pool assets. Three-token settlement is
-available only on synchronous atomic pools.
-
-### Select it in the quote
-
-```bash
-curl -X POST 'https://api.oneswap.cc/swapv2/api/trader/quote' \
-  -H 'content-type: application/json' \
-  -H 'x-trader-key: tk_live_...' \
-  -d '{
-    "poolId":"rt-...",
-    "amountIn":100,
-    "xToY":true,
-    "feeMode":"token"
-  }'
-```
-
-The quote reports the selected fee and authoritative balance checks:
-
-```json
-{
-  "feeMode": "token",
-  "tokenFee": {
-    "symbol": "USX",
-    "amount": 0.0001,
-    "feeWallet": "oneswap-op-...::..."
-  },
-  "tokenFeeBalance": 2,
-  "tokenFeeRequired": 0.0001,
-  "sufficientTokenFee": true,
-  "sufficientFunds": true
-}
-```
-
-For Trader SDK requests, the backend derives `tokenFee.amount` from the live Canton traffic
-cost, including the additional fee-token allocation. It subtracts OneSwap's measured reward
-recovery, applies the trader's existing network-fee promotion, and converts CC → USDCx → the
-configured fee token at live prices. The quote includes that calculation:
-
-```json
-{
-  "tokenFee": {
-    "symbol": "USX",
-    "amount": 0.0266,
-    "pricingMode": "traffic-converted",
-    "grossTrafficCc": 1.333333,
-    "recoveryFraction": 0.8,
-    "networkMultiplier": 1,
-    "netTrafficCc": 0.266667,
-    "ccPriceUsdcx": 0.1,
-    "feeTokenPriceUsdcx": 1,
-    "usdcxCost": 0.0266667,
-    "promotionalWaiver": false
-  }
-}
-```
-
-A 100% network-fee promotion returns `amount: 0` and `promotionalWaiver: true`. The swap
-still executes, but the atomic settlement omits the fee-token transfer. Traders without that
-promotion pay the converted amount in the final quote.
-
-Pass the same `feeMode: "token"` to `/api/trader/swap`. The swap input, output, and fee-token
-leg, when charged, settle atomically. If any leg fails, none of them settle.
-
-The TypeScript SDK exposes the same selection as `feeMode: 'token'` on `quote()` and `swap()`.
+The quote reports the final amount and authoritative fee-token balance checks. A trader with
+a 100% promotion receives `amount: 0` and `promotionalWaiver: true`; settlement omits the fee
+allocation. A trader without that promotion pays the converted amount shown in the final
+quote. When charged, the swap input, output, and fee-token allocation settle atomically.
 
 <Warning>
-  Never switch fee modes between quote and swap. Build `minAmountOut` from a quote using the
-  same `poolId`, direction, amount, and `feeMode` as the submitted swap.
+  Use the same pool, direction, amount, and `feeMode` for the quote and swap. Do not reuse a
+  prepaid quote for a token-fee swap or switch fee modes after calculating `minAmountOut`.
 </Warning>
 
-## Other endpoints
+## History and asynchronous intents
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/trader/tokens` | Registered tokens |
-| `GET` | `/api/trader/swaps` | History for the key's bound wallet |
-| `GET` | `/api/trader/intent/:id` | Status of an asynchronous intent |
+```ts
+const history = await trader.history({ limit: 50 })
+
+if (result.status === 'reserved' && result.intentId) {
+  const status = await trader.intent(result.intentId)
+  console.log(status.status)
+}
+```
+
+Synchronous pools return their settlement result directly. For an asynchronous pool, poll
+the returned intent until it reaches a terminal state. Three-token settlement is available
+only on synchronous atomic pools.
 
 ## Disable access
 
-Contact OneSwap to revoke a key, disable Trader SDK access, or disable three-token selection.
-Existing keys stop working on their next request after access is revoked.
+Contact OneSwap to revoke a key, disable Trader SDK access, or change three-token eligibility.
+Revoked access is rejected on subsequent SDK calls.
