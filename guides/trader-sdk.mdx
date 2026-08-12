@@ -208,8 +208,35 @@ The quote reports the selected fee and authoritative balance checks:
 }
 ```
 
+For Trader SDK requests, the backend derives `tokenFee.amount` from the live Canton traffic
+cost, including the additional fee-token allocation. It subtracts OneSwap's measured reward
+recovery, applies the trader's existing network-fee promotion, and converts CC → USDCx → the
+configured fee token at live prices. The quote includes that calculation:
+
+```json
+{
+  "tokenFee": {
+    "symbol": "USX",
+    "amount": 0.0266,
+    "pricingMode": "traffic-converted",
+    "grossTrafficCc": 1.333333,
+    "recoveryFraction": 0.8,
+    "networkMultiplier": 1,
+    "netTrafficCc": 0.266667,
+    "ccPriceUsdcx": 0.1,
+    "feeTokenPriceUsdcx": 1,
+    "usdcxCost": 0.0266667,
+    "promotionalWaiver": false
+  }
+}
+```
+
+A 100% network-fee promotion returns `amount: 0` and `promotionalWaiver: true`. The swap
+still executes, but the atomic settlement omits the fee-token transfer. Traders without that
+promotion pay the converted amount in the final quote.
+
 Pass the same `feeMode: "token"` to `/api/trader/swap`. The swap input, output, and fee-token
-leg settle atomically. If any leg fails, none of them settle.
+leg, when charged, settle atomically. If any leg fails, none of them settle.
 
 The TypeScript SDK exposes the same selection as `feeMode: 'token'` on `quote()` and `swap()`.
 
