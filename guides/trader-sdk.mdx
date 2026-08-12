@@ -1,0 +1,245 @@
+---
+title: "Trader SDK"
+description: "Enable selected accounts to quote and trade their own OneSwap wallet, including optional three-token fees."
+---
+
+The Trader SDK lets an existing OneSwap account trade its own wallet over HTTP. It is separate
+from the [integrator SDK](/introduction): an integrator key creates deposit-and-return swaps for
+other users, while a trader key can move funds only from the wallet bound to that key.
+
+The mainnet API base is:
+
+```text
+https://api.oneswap.cc/swapv2
+```
+
+Install the typed TypeScript client for a backend service or trading bot:
+
+```bash
+npm install @oneswap/trader-sdk
+```
+
+## Access model
+
+Trader access is fail-closed. All of these must remain valid:
+
+1. The global Trader SDK switch is enabled.
+2. An administrator enables the trader's OneSwap account.
+3. The trader creates a `tk_live_...` key bound to one wallet they own.
+4. The account can access the selected pool. Private pools require a separate pool allowlist grant.
+
+A trader key never accepts a client-supplied `walletId`. The backend resolves its bound wallet
+from the key and rechecks ownership on every request.
+
+## Enable a trader
+
+An administrator enables an account by username or account ID:
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/rt/trader-sdk/accounts' \
+  -H 'content-type: application/json' \
+  -H 'x-admin-token: <admin-token>' \
+  -d '{"identifier":"trader-username","enabled":true}'
+```
+
+For a private pool, also add the account under **Admin → Pools → Access**. Trader SDK pool
+access follows the account grant; an integrator `sk_live_...` key grant does not apply to a
+trader key.
+
+## Create a wallet-bound key
+
+The trader creates their own key through an authenticated account session:
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/account/trader-keys' \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer <account-session>' \
+  -d '{"walletId":"w_...","label":"production bot"}'
+```
+
+The response includes a `tk_live_...` key. Store it immediately: the plaintext is shown once.
+Send it as `x-trader-key` on Trader SDK requests.
+
+## List pools and balances
+
+```bash
+curl 'https://api.oneswap.cc/swapv2/api/trader/pools' \
+  -H 'x-trader-key: tk_live_...'
+
+curl 'https://api.oneswap.cc/swapv2/api/trader/balances' \
+  -H 'x-trader-key: tk_live_...'
+```
+
+## Quote and swap
+
+Quote before every swap. `xToY: true` pays with the pool's `assetX`; `false` pays with
+`assetY`.
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/trader/quote' \
+  -H 'content-type: application/json' \
+  -H 'x-trader-key: tk_live_...' \
+  -d '{
+    "poolId":"rt-...",
+    "amountIn":100,
+    "xToY":true,
+    "feeMode":"prepaid"
+  }'
+```
+
+Then submit the swap with a unique idempotency key and a minimum output derived from the quote:
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/trader/swap' \
+  -H 'content-type: application/json' \
+  -H 'x-trader-key: tk_live_...' \
+  -H 'idempotency-key: order-1042' \
+  -d '{
+    "poolId":"rt-...",
+    "amountIn":100,
+    "xToY":true,
+    "minAmountOut":9.9,
+    "slippageBps":100,
+    "feeMode":"prepaid"
+  }'
+```
+
+Omitting `feeMode` is equivalent to `"prepaid"` and preserves the ordinary fee path.
+
+With the TypeScript SDK, the same flow is:
+
+```ts
+import { TraderSDK } from '@oneswap/trader-sdk'
+
+const trader = new TraderSDK({
+  apiKey: process.env.ONESWAP_TRADER_KEY!,
+  environment: 'mainnet',
+})
+
+const quote = await trader.quote({
+  poolId: 'rt-...',
+  amountIn: 100,
+  xToY: true,
+  feeMode: 'prepaid',
+})
+
+if (quote.sufficientFunds) {
+  await trader.swap({
+    poolId: 'rt-...',
+    amountIn: 100,
+    xToY: true,
+    minAmountOut: quote.amountOut * 0.99,
+    feeMode: 'prepaid',
+    idempotencyKey: 'order-1042',
+  })
+}
+```
+
+Keep a trader key on a server you control. It can execute trades with real wallet funds and
+must never be embedded in a browser or mobile application.
+
+## Three-token fees
+
+A trader may explicitly select a third-token network fee by sending `"feeMode":"token"`.
+This is opt-in per request and requires three gates:
+
+1. **Trader permission:** enable the account for token fees.
+2. **Pool support:** configure a fee token for the pool.
+3. **Request selection:** the trader sends `feeMode: "token"` to both quote and swap.
+
+The configured fee instrument must differ from both pool assets. Three-token settlement is
+available only on synchronous atomic pools.
+
+### Enable the account
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/rt/token-fee/accounts' \
+  -H 'content-type: application/json' \
+  -H 'x-admin-token: <admin-token>' \
+  -d '{"identifier":"trader-username","enabled":true}'
+```
+
+### Configure the pool
+
+In the admin console, open **Pools → Edit → Trader SDK three-token fee**, choose a registered
+token such as USX, and save. This records the exact on-ledger `(admin, instrument ID)`; the
+display symbol alone is not used as identity.
+
+You can also configure it through the admin API:
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/rt/pool/rt-.../fee-token' \
+  -H 'content-type: application/json' \
+  -H 'x-admin-token: <admin-token>' \
+  -d '{"symbol":"USX"}'
+```
+
+If fees are USD-denominated, the configured token must have a live or administrator-provided
+USD price. The backend rejects an unpriceable fee token rather than charging an incorrect fee.
+
+### Select it in the quote
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/trader/quote' \
+  -H 'content-type: application/json' \
+  -H 'x-trader-key: tk_live_...' \
+  -d '{
+    "poolId":"rt-...",
+    "amountIn":100,
+    "xToY":true,
+    "feeMode":"token"
+  }'
+```
+
+The quote reports the selected fee and authoritative balance checks:
+
+```json
+{
+  "feeMode": "token",
+  "tokenFee": {
+    "symbol": "USX",
+    "amount": 0.0001,
+    "feeWallet": "oneswap-op-...::..."
+  },
+  "tokenFeeBalance": 2,
+  "tokenFeeRequired": 0.0001,
+  "sufficientTokenFee": true,
+  "sufficientFunds": true
+}
+```
+
+Pass the same `feeMode: "token"` to `/api/trader/swap`. The swap input, output, and fee-token
+leg settle atomically. If any leg fails, none of them settle.
+
+The TypeScript SDK exposes the same selection as `feeMode: 'token'` on `quote()` and `swap()`.
+
+<Warning>
+  Never switch fee modes between quote and swap. Build `minAmountOut` from a quote using the
+  same `poolId`, direction, amount, and `feeMode` as the submitted swap.
+</Warning>
+
+## Other endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/trader/tokens` | Registered tokens |
+| `GET` | `/api/trader/swaps` | History for the key's bound wallet |
+| `GET` | `/api/trader/intent/:id` | Status of an asynchronous intent |
+| `GET` | `/api/account/trader-keys` | List the signed-in account's masked keys |
+| `DELETE` | `/api/account/trader-keys/:id` | Revoke one of the account's keys |
+
+## Disable access
+
+An administrator can disable the account immediately. Existing keys then fail on their next
+request:
+
+```bash
+curl -X POST 'https://api.oneswap.cc/swapv2/api/rt/trader-sdk/accounts' \
+  -H 'content-type: application/json' \
+  -H 'x-admin-token: <admin-token>' \
+  -d '{"identifier":"trader-username","enabled":false}'
+```
+
+Disable only three-token selection through `/api/rt/token-fee/accounts` with
+`"enabled":false`, or remove the pool's fee instrument by posting `{"symbol":null}` to its
+`fee-token` endpoint.

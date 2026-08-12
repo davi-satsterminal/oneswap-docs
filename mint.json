@@ -26,6 +26,7 @@
       "pages": [
         "guides/swaps",
         "guides/api-keys",
+        "guides/trader-sdk",
         "guides/error-handling"
       ]
     },
