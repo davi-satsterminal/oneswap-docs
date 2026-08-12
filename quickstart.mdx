@@ -69,6 +69,7 @@ This walks you through one complete swap: quote it, create it, hand your user a 
       inSymbol: 'CBTC',      // token the user deposits
       amountIn: 0.01,        // amount of inSymbol to swap
       outSymbol: 'HTEST',    // token to return to the user
+      poolId: quote.poolId,  // settle against the pool that produced the quote
     })
 
     console.log(swap.id)           // 'esc_...'
@@ -124,6 +125,7 @@ async function swapForUser() {
     inSymbol: 'CBTC',
     amountIn: 0.01,
     outSymbol: 'HTEST',
+    poolId: quote.poolId,
   })
 
   // 3. Show your end-user where to send the deposit

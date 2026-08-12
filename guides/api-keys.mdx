@@ -77,6 +77,46 @@ ask for a per-operation raise rather than a blanket one.
 Exceeding a limit returns HTTP `429` (`RateLimitError`). Back off and retry — see
 [Error handling](/guides/error-handling).
 
+## Private pool access
+
+OneSwap can grant an individual SDK key access to a private pool. The grant applies to the exact
+key, not every key owned by the same integrator. This lets you isolate pool access by service or
+environment.
+
+Ask the OneSwap team to add the key's non-secret key ID to the pool allowlist. Do not send the
+plaintext `sk_live_...` value through an insecure channel. After the grant:
+
+- `pools.list()` includes the private pool for that key.
+- `pools.get` and `pools.getTicker` can read that pool.
+- `quotes.get` can quote it.
+- `swaps.createSwap` can settle against it.
+
+SDK 1.3.0 adds `poolId` to `swaps.createSwap`. Pin both the quote and swap when you want a
+specific private pool:
+
+```typescript
+const poolId = 'rt-...'
+
+const quote = await oneswap.quotes.get({
+  from: 'CBTC',
+  to: 'USDCx',
+  amount: 0.01,
+  poolId,
+})
+
+const swap = await oneswap.swaps.createSwap({
+  userRef: 'user-1042',
+  inSymbol: 'CBTC',
+  amountIn: 0.01,
+  outSymbol: 'USDCx',
+  poolId: quote.poolId,
+  minOut: quote.amountOut * 0.99,
+})
+```
+
+Revoking the API key immediately removes its authentication and pool access. A replacement key
+does not inherit the grant; ask the OneSwap team to allowlist the new key ID before switching.
+
 ## Security best practices
 
 <Warning>
