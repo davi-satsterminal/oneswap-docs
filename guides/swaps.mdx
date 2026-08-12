@@ -127,8 +127,7 @@ Once a deposit has arrived the swap holds funds and must run to completion — `
 Every swap settles against exactly **one pool**. The `{ inSymbol, outSymbol }` pair must have a live pool that trades it directly; if it doesn't, `createSwap` errors (and `quotes.get` throws `NoDirectPoolError`). There is no multi-hop routing — to move between two tokens with no shared pool, run two swaps through an intermediate asset (usually CC), each with its own settlement and fees.
 
 SDK 1.3.0 and later accept `poolId` in `createSwap`. Pass the `poolId` returned by `quotes.get`
-to guarantee that settlement uses the pool you quoted. Your API key can also use this field to
-select a [private pool granted to that key](/guides/api-keys#private-pool-access).
+to guarantee that settlement uses the pool you quoted.
 
 ## Network fee comes from the input
 

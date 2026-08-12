@@ -288,10 +288,7 @@ Throws [`NoDirectPoolError`](/guides/error-handling#the-no-direct-pool-case) whe
 
 ## `pools.list`
 
-All pools visible to the caller, with live reserves and fee configuration.
-
-This includes private pools granted to the exact API key. A grant does not carry over to other
-keys owned by the same integrator. See [Private pool access](/guides/api-keys#private-pool-access).
+All pools available to the caller, with live reserves and fee configuration.
 
 ```typescript
 oneswap.pools.list(): Promise<Pool[]>
