@@ -1,6 +1,6 @@
 ---
 title: "Trader SDK"
-description: "Quote and trade a OneSwap wallet with an administrator-issued Trader SDK key."
+description: "Trade pools and launchpad coins on a OneSwap wallet with an administrator-issued Trader SDK key."
 ---
 
 The Trader SDK lets an approved OneSwap account trade its own wallet from a server-side
@@ -138,6 +138,60 @@ if (result.status === 'reserved' && result.intentId) {
 Synchronous pools return their settlement result directly. For an asynchronous pool, poll
 the returned intent until it reaches a terminal state. Three-token settlement is available
 only on synchronous atomic pools.
+
+## Trade launchpad coins
+
+The same key trades launchpad coins on its bound wallet through `trader.launchpad`. Buys spend
+CC (Amulet) and sells spend the coin's token. Graduated coins trade on their pool through the
+same calls.
+
+```ts
+const { coins } = await trader.launchpad.coins({ sort: 'volume', limit: 20 })
+const coin = coins[0]
+
+const { quote, networkFee } = await trader.launchpad.quote({
+  coinId: coin.id,
+  side: 'buy',
+  amount: 25, // CC to spend
+})
+if (quote.side !== 'buy') throw new Error('Unexpected quote')
+
+const order = await trader.launchpad.buy({
+  coinId: coin.id,
+  ccIn: 25,
+  minTokensOut: quote.tokensOut * 0.99,
+  slippageBps: 100,
+  idempotencyKey: 'lp-order-2001',
+})
+
+const settled = await trader.launchpad.waitForIntent(order.intent.intentId)
+console.log(settled.intent.status, settled.intent.trade)
+```
+
+To sell, quote with `side: 'sell'` and pass `quote.ccOut` as the floor:
+
+```ts
+const sellQuote = await trader.launchpad.quote({ coinId: coin.id, side: 'sell', amount: 500000 })
+if (sellQuote.quote.side === 'sell') {
+  await trader.launchpad.sell({
+    coinId: coin.id,
+    tokensIn: 500000,
+    minCcOut: sellQuote.quote.ccOut * 0.99,
+    idempotencyKey: 'lp-order-2002',
+  })
+}
+```
+
+- `idempotencyKey` is required: 8–200 letters, digits, `.`, `_`, `:`, or `-`. Reuse it only to
+  retry the same order.
+- `slippageBps` defaults to `100` and accepts `0`–`5000`.
+- `networkFee.cc` is billed to the wallet's prepaid CC balance when the order settles.
+- A buy quote can name the exact tokens to receive with `tokensOut` instead of `amount`.
+- `trader.launchpad.positions()` lists the wallet's launchpad holdings, and
+  `trader.launchpad.intent(id)` reads one order.
+- Self-custody wallets need an active mandate, as for pool swaps.
+
+For read-only launchpad data without a trading key, use the [Launchpad SDK](/guides/launchpad-sdk).
 
 ## Disable access
 

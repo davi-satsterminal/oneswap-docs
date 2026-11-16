@@ -1,0 +1,121 @@
+---
+title: "Launchpad SDK"
+description: "Read launchpad coins, trades, holders, and quotes with a read-only Launchpad API key."
+---
+
+The Launchpad SDK gives you read-only access to the OneSwap Launchpad: coins, prices, trades,
+anonymous holder balances, and indicative quotes. Use it for dashboards, market monitors,
+analytics, and listings. It cannot trade. To trade launchpad coins on your own wallet, use the
+[Trader SDK](/guides/trader-sdk#trade-launchpad-coins).
+
+## Install
+
+```bash
+npm install @oneswap/launchpad-sdk
+```
+
+## Get a Launchpad API key
+
+Sign in to OneSwap and open **Developer**. Under **Launchpad API keys**, enter an optional
+label and click **Generate key**.
+
+| Network | Create keys at |
+|---|---|
+| Mainnet | [swap.oneswap.cc](https://swap.oneswap.cc) |
+| Devnet | [devnet.oneswap.cc](https://devnet.oneswap.cc) |
+
+A key looks like `lpk_live_` followed by 48 hex characters.
+
+- The key is read-only. It is not linked to a wallet and cannot move funds.
+- You can hold up to five active keys. Revoke a key from the same page.
+- Each key has its own per-minute request limit. Contact OneSwap if you need a higher one.
+
+<Warning>
+  The key is shown once, at creation. OneSwap stores only a hash of it. If you lose a key,
+  generate a new one and revoke the old one. Keep keys on a server, not in browser code.
+</Warning>
+
+## Create the client
+
+```ts
+import { LaunchpadSDK } from '@oneswap/launchpad-sdk'
+
+const lp = new LaunchpadSDK({
+  apiKey: process.env.ONESWAP_LAUNCHPAD_KEY!,
+  environment: 'mainnet', // or 'devnet'
+})
+```
+
+## List coins
+
+```ts
+const { coins, nextCursor } = await lp.coins({ sort: 'volume', lane: 'new', limit: 20 })
+
+for await (const coin of lp.allCoins({ sort: 'mcap' })) {
+  console.log(coin.symbol, coin.price, coin.marketCap, coin.graduationPercent)
+}
+```
+
+- `sort` is `recent` (default), `volume`, or `mcap`.
+- `lane` is `new`, `stretch`, or `graduated`.
+- Prices, market caps, and volumes are in CC (Amulet).
+- Pass `nextCursor` back as `cursor` to page manually, or use `allCoins` to page for you.
+
+## Read one coin
+
+```ts
+const coin = await lp.coin(coinId)
+console.log(coin.curve, coin.holderCount, coin.recentTrades.length)
+```
+
+A coin includes its bonding-curve state, recent trades, and anonymous holder balances. After
+graduation, `liquidityMigrated` turns `true` once the coin trades on its pool.
+
+## Trades and holders
+
+```ts
+const { trades } = await lp.trades(coinId, { limit: 50 })
+for await (const trade of lp.allTrades(coinId)) {
+  // newest first
+}
+
+const latest = await lp.recentTrades() // across all public coins
+
+const holders = await lp.holders(coinId)
+if (holders.holderData.status === 'complete') {
+  console.log(holders.holderCount)
+}
+```
+
+Holder entries contain balances only; party IDs are never exposed. After graduation, holder
+data can be `unavailable` because pool holdings are not indexed.
+
+## Quotes
+
+```ts
+const buy = await lp.quote(coinId, { side: 'buy', amount: 25 }) // spend 25 CC
+const exact = await lp.quote(coinId, { side: 'buy', tokensOut: '1000000' }) // receive exact tokens
+const sell = await lp.quote(coinId, { side: 'sell', amount: 500000 }) // sell tokens
+```
+
+Quotes are indicative. They are not tied to a wallet and do not include the network fee. A
+graduated coin whose liquidity is still moving to its pool returns `ConflictError` until the
+move completes.
+
+## Errors and rate limits
+
+Every failure is a subclass of `LaunchpadError` with `status`, `code`, and `data`:
+
+| Error | When |
+|---|---|
+| `AuthError` | The key is missing or revoked. |
+| `ForbiddenError` | The key's account cannot read the launchpad yet. |
+| `ValidationError` | An argument is invalid. |
+| `NotFoundError` | The coin does not exist or is withheld from public reads. |
+| `ConflictError` | The coin's liquidity is still migrating. |
+| `RateLimitError` | The key used up its per-minute limit. |
+| `ServerError`, `NetworkError`, `TimeoutError` | The request failed upstream or in transit. |
+
+When a key goes over its limit, the SDK waits for the server's retry delay and tries again,
+twice by default. Set `maxRateLimitRetries: 0` to handle `RateLimitError` and its
+`retryAfterSeconds` yourself.
