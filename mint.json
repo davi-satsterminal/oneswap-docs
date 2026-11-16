@@ -29,6 +29,7 @@
         "guides/trader-sdk",
         "guides/launchpad-sdk",
         "guides/launchpad-api",
+        "guides/launchpad-liquidity",
         "guides/error-handling"
       ]
     },

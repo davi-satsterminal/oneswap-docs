@@ -36,3 +36,12 @@ test("Launchpad API guide documents every read endpoint and is in the navigation
   const mint = JSON.parse(await read("mint.json"));
   assert.ok(mint.navigation.some((group) => group.pages.includes("guides/launchpad-api")));
 });
+
+test("Launchpad liquidity guide explains the fee split and is in the navigation", async () => {
+  const guide = await read("guides/launchpad-liquidity.mdx");
+  for (const term of ["**Fees earned**", "**Price change**", "**Net return**", "Fees earned plus price change always equals net return", "compound automatically", "when you remove liquidity"]) {
+    assert.ok(guide.includes(term), `missing: ${term}`);
+  }
+  const mint = JSON.parse(await read("mint.json"));
+  assert.ok(mint.navigation.some((group) => group.pages.includes("guides/launchpad-liquidity")));
+});
