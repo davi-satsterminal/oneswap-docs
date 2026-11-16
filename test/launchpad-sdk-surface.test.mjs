@@ -18,6 +18,8 @@ test("Trader SDK guide documents launchpad trading", async () => {
   for (const method of ["trader.launchpad.quote(", "trader.launchpad.buy(", "trader.launchpad.sell(", "waitForIntent(", "positions()"]) {
     assert.ok(guide.includes(method), `missing launchpad method example: ${method}`);
   }
+  assert.ok(!guide.includes("trader.launchpad.trades("), "trader SDK has no trade feed");
+  assert.ok(guide.includes("never shows other holders"), "trader SDK guide states holder privacy");
 });
 
 test("Launchpad SDK guide is in the navigation", async () => {

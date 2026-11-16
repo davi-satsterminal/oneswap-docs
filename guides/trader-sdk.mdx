@@ -147,7 +147,7 @@ same calls.
 
 ```ts
 const { coins } = await trader.launchpad.coins({ sort: 'volume', limit: 20 })
-const coin = coins[0]
+const coin = await trader.launchpad.coin(coins[0].id) // price and curve state
 
 const { quote, networkFee } = await trader.launchpad.quote({
   coinId: coin.id,
@@ -191,7 +191,21 @@ if (sellQuote.quote.side === 'sell') {
   `trader.launchpad.intent(id)` reads one order.
 - Self-custody wallets need an active mandate, as for pool swaps.
 
-For read-only launchpad data without a trading key, use the [Launchpad SDK](/guides/launchpad-sdk).
+### What a trader key can see
+
+A trader key trades its own wallet, so it sees only what it needs to trade:
+
+| Call | Returns |
+|---|---|
+| `trader.launchpad.coins()` | The public coin list. |
+| `trader.launchpad.coin(id)` | One coin's price and bonding-curve state. |
+| `trader.launchpad.quote()` | A quote for your wallet, with the network fee. |
+| `trader.launchpad.positions()` | Your wallet's launchpad holdings. |
+| `trader.launchpad.intent(id)` | One of your orders. |
+
+It never shows other holders, holder counts, or other people's trades. Version 0.4.0 removed the
+trade feed and holder data from the trader SDK. For market data such as holder counts and the trade feed, use the
+[Launchpad SDK](/guides/launchpad-sdk).
 
 ## Disable access
 
