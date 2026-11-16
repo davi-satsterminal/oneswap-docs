@@ -1,10 +1,10 @@
 ---
 title: "Launchpad SDK"
-description: "Read launchpad coins, trades, holders, and quotes with a read-only Launchpad API key."
+description: "Read launchpad coins, trades, holder counts, and quotes with a read-only Launchpad API key."
 ---
 
 The Launchpad SDK gives you read-only access to the OneSwap Launchpad: coins, prices, trades,
-anonymous holder balances, and indicative quotes. Use it for dashboards, market monitors,
+holder counts, and indicative quotes. Use it for dashboards, market monitors,
 analytics, and listings. It cannot trade. To trade launchpad coins on your own wallet, use the
 [Trader SDK](/guides/trader-sdk#trade-launchpad-coins). To call the API over HTTP from
 another language, see the [Launchpad API](/guides/launchpad-api).
@@ -69,7 +69,7 @@ const coin = await lp.coin(coinId)
 console.log(coin.curve, coin.holderCount, coin.recentTrades.length)
 ```
 
-A coin includes its bonding-curve state, recent trades, and anonymous holder balances. After
+A coin includes its bonding-curve state, recent trades, and its holder count. After
 graduation, `liquidityMigrated` turns `true` once the coin trades on its pool.
 
 ### Links and image
@@ -83,7 +83,7 @@ image**. A link the creator removes comes back as an empty string.
   the creator's latest edit.
 </Tip>
 
-## Trades and holders
+## Trades and holder count
 
 ```ts
 const { trades } = await lp.trades(coinId, { limit: 50 })
@@ -93,14 +93,14 @@ for await (const trade of lp.allTrades(coinId)) {
 
 const latest = await lp.recentTrades() // across all public coins
 
-const holders = await lp.holders(coinId)
-if (holders.holderData.status === 'complete') {
-  console.log(holders.holderCount)
+const { holderCount, holderData } = await lp.holders(coinId)
+if (holderData.status === 'complete') {
+  console.log(holderCount)
 }
 ```
 
-Holder entries contain balances only; party IDs are never exposed. After graduation, holder
-data can be `unavailable` because pool holdings are not indexed.
+You get how many wallets hold a coin, not who holds it: no addresses, usernames, or balances.
+After graduation, holder data can be `unavailable` because pool holdings are not indexed.
 
 ## Quotes
 

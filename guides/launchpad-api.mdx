@@ -1,10 +1,10 @@
 ---
 title: "Launchpad API"
-description: "Read launchpad coins, trades, holders, and quotes over HTTP with a read-only Launchpad API key."
+description: "Read launchpad coins, trades, holder counts, and quotes over HTTP with a read-only Launchpad API key."
 ---
 
 The Launchpad API is a read-only HTTP API for the OneSwap Launchpad. It serves the same coins,
-prices, trades, anonymous holder balances, and indicative quotes as the website. It cannot
+prices, trades, holder counts, and indicative quotes as the website. It cannot
 trade. If you work in TypeScript, the [Launchpad SDK](/guides/launchpad-sdk) wraps this API
 for you.
 
@@ -45,7 +45,7 @@ All endpoints are `GET`. Any other method returns `405`.
 | `/coins` | `sort`, `lane`, `limit`, `cursor` | `{ coins, nextCursor }` |
 | `/coins/{coinId}` | | `{ coin }` |
 | `/coins/{coinId}/trades` | `limit`, `cursor` | `{ trades, nextCursor }` |
-| `/coins/{coinId}/holders` | `limit`, `cursor` | `{ holders, holderCount, holderData, nextCursor }` |
+| `/coins/{coinId}/holders` | | `{ holderCount, holderData }` |
 | `/coins/{coinId}/quote` | `side`, `amount` or `tokensOut` | `{ quote }` |
 | `/trades/recent` | | `{ trades }` |
 
@@ -69,14 +69,14 @@ curl https://api.oneswap.cc/swapv2/api/launchpad/v1/coins/$COIN_ID \
   -H "x-launchpad-key: $ONESWAP_LAUNCHPAD_KEY"
 ```
 
-`coin` includes its bonding-curve state (`curve`), recent trades, and anonymous holder balances.
+`coin` includes its bonding-curve state (`curve`), recent trades, and `holderCount`.
 After graduation, `liquidityMigrated` turns `true` once the coin trades on its pool.
 
 `imageUrl`, `websiteUrl`, `xUrl`, and `telegramUrl` show the coin's current image and links. The
 creator can change them after launch, so read them again rather than caching them forever. A
 link the creator removes is an empty string.
 
-### Trades and holders
+### Trades and holder count
 
 ```bash
 curl "https://api.oneswap.cc/swapv2/api/launchpad/v1/coins/$COIN_ID/trades?limit=50" \
@@ -90,7 +90,7 @@ curl https://api.oneswap.cc/swapv2/api/launchpad/v1/trades/recent \
 ```
 
 - Trades come newest first.
-- Holder entries contain `balance` only. Party IDs are never returned.
+- Holders are a count only. No addresses, usernames, or balances are returned.
 - Check `holderData.status` before you trust `holderCount`. It is `complete`, `partial`, or
   `unavailable`. After graduation, holder data can be `unavailable` because pool holdings are
   not indexed.
