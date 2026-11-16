@@ -6,7 +6,8 @@ description: "Read launchpad coins, trades, holders, and quotes with a read-only
 The Launchpad SDK gives you read-only access to the OneSwap Launchpad: coins, prices, trades,
 anonymous holder balances, and indicative quotes. Use it for dashboards, market monitors,
 analytics, and listings. It cannot trade. To trade launchpad coins on your own wallet, use the
-[Trader SDK](/guides/trader-sdk#trade-launchpad-coins).
+[Trader SDK](/guides/trader-sdk#trade-launchpad-coins). To call the API over HTTP from
+another language, see the [Launchpad API](/guides/launchpad-api).
 
 ## Install
 
@@ -70,6 +71,17 @@ console.log(coin.curve, coin.holderCount, coin.recentTrades.length)
 
 A coin includes its bonding-curve state, recent trades, and anonymous holder balances. After
 graduation, `liquidityMigrated` turns `true` once the coin trades on its pool.
+
+### Links and image
+
+`imageUrl`, `websiteUrl`, `xUrl`, and `telegramUrl` show the coin's current image and links.
+The creator can change them at any time after launch, from **My launches** → **Edit links &
+image**. A link the creator removes comes back as an empty string.
+
+<Tip>
+  Don't cache a coin's image or links forever. Read them again from `coin` or `coins` to pick up
+  the creator's latest edit.
+</Tip>
 
 ## Trades and holders
 

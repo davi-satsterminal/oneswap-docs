@@ -28,6 +28,7 @@
         "guides/api-keys",
         "guides/trader-sdk",
         "guides/launchpad-sdk",
+        "guides/launchpad-api",
         "guides/error-handling"
       ]
     },

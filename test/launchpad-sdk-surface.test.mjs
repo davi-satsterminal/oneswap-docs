@@ -24,3 +24,13 @@ test("Launchpad SDK guide is in the navigation", async () => {
   const mint = JSON.parse(await read("mint.json"));
   assert.ok(mint.navigation.some((group) => group.pages.includes("guides/launchpad-sdk")));
 });
+
+test("Launchpad API guide documents every read endpoint and is in the navigation", async () => {
+  const guide = await read("guides/launchpad-api.mdx");
+  for (const term of ["x-launchpad-key", "/coins", "/coins/{coinId}", "/trades", "/holders", "/quote", "/trades/recent", "/config", "X-RateLimit-Remaining", "Retry-After"]) {
+    assert.ok(guide.includes(term), `missing: ${term}`);
+  }
+  assert.ok(!guide.includes("x-trader-key"), "trader HTTP routes stay out of the docs");
+  const mint = JSON.parse(await read("mint.json"));
+  assert.ok(mint.navigation.some((group) => group.pages.includes("guides/launchpad-api")));
+});
