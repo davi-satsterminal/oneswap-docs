@@ -5,7 +5,7 @@ description: "Register your token’s website, connect a OneSwap Wallet, and giv
 
 Use the creator dApp SDK when you want someone to sign in to **your own website** with OneSwap Wallet. You can give access to holders of your token, sell a pass in that token, or propose a reward for a connected member. You define the content, prices and reward rules. OneSwap handles wallet consent and transfer approval.
 
-**Start on DevNet.** A token creator can register their site and use test assets there. Mainnet creator registration currently has limited access. Installing the SDK does not enroll a mainnet account. To try the screens first, open the [DevNet sandbox](https://devnet.oneswap.cc/dapps/sandbox). It uses sample data and does not move funds.
+Any token creator can register a site from **My launches → dApps** on [OneSwap](https://www.oneswap.cc/launchpad/launches?tab=dapps). Sign in with your OneSwap account to try the [dApp sandbox](https://www.oneswap.cc/dapps/sandbox). It uses sample data and works before you register a dApp. For an end-to-end integration test with your own site and test assets, use DevNet.
 
 | What you can build | When it is available |
 | --- | --- |
@@ -16,7 +16,7 @@ Use the creator dApp SDK when you want someone to sign in to **your own website*
 
 ## Register your website
 
-1. Sign in with the wallet that created the DevNet token. In [**My launches → dApps**](https://devnet.oneswap.cc/launchpad/launches?tab=dapps), select your token. Each token has one registered app. You can add multiple experiences inside it.
+1. Sign in with the wallet that created the token. Select your token in **My launches → dApps** on [DevNet](https://devnet.oneswap.cc/launchpad/launches?tab=dapps) or [mainnet](https://www.oneswap.cc/launchpad/launches?tab=dapps). Each token has one registered app. You can add multiple experiences inside it.
 2. Choose **Register your website**. Enter the name members should see, the exact HTTPS origin listed as your token’s official website and a return URL on that same origin. For example, use `https://members.example.com` and `https://members.example.com/callback`. Your server must handle that path.
 3. Under **Website settings**, generate the DNS TXT record, publish it and select **Check verification**. For a standard `<project>.vercel.app` origin, the dashboard also offers a file you can publish at the displayed path. The file must be public and return the displayed value without a redirect. Renew verification before the seven-day expiry shown in the dashboard.
 4. In **Server keys**, select **Create server key**. Copy the app ID and store the new secret in your backend’s secret manager, or download the backend configuration while the key is available. The secret is shown once. Keep the file out of source control, browser builds and logs.
@@ -24,10 +24,10 @@ Use the creator dApp SDK when you want someone to sign in to **your own website*
 
 ## Install the SDK
 
-Install version 0.1.0 from the npm registry in your backend project. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
+Install version 0.2.0 from the npm registry in your backend project. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
 
 ```bash
-npm install @oneswap/dapp-sdk@0.1.0
+npm install @oneswap/dapp-sdk@0.2.0
 ```
 
 Import the server client only in backend code. Select the network explicitly and use the app ID, secret and return URL from that same network.
