@@ -5,7 +5,7 @@ description: "Connect a member to your app and check fixed holder requirements w
 
 A member signs in on OneSwap Wallet, sees your verified website and its list of fixed holder requirements, and accepts or declines the connection as a whole. Your backend receives a member ID scoped to this app. The same person has different IDs in different apps.
 
-For this flow, use the hosted OneSwap authorization screen. A site using PartyLayer can use the OneSwap adapter separately for wallet discovery, account selection and supported message signing. A PartyLayer connection alone does not authorize a creator dApp to check membership or spend funds. [OneSwap PartyLayer adapter](https://www.npmjs.com/package/@oneswap/wallet-cip0103-adapter)
+The SDK opens OneSwap Wallet directly for sign-in and consent. If your site already uses PartyLayer, its OneSwap adapter can discover the wallet, identify the selected account and request message signatures. Start the SDK sign-in when a member wants to use your creator app, even if they have connected through PartyLayer. This lets them approve the holder checks you listed. [OneSwap PartyLayer adapter](https://www.npmjs.com/package/@oneswap/wallet-cip0103-adapter)
 
 ## Connect a member
 
