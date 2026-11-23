@@ -12,7 +12,7 @@
 
 - Use `OneSwap` (not `Oneswap`).
 - Use `Canton Network` for network references.
-- Use `CC (Amulet)` and `USDCx` as token names.
+- Use `CC` (Canton Coin) and `USDCx` as token names. Preserve literal on-ledger identifiers in API examples.
 - Use `party ID` when referring to Canton identities.
 
 ## Style preferences
