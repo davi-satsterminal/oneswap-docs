@@ -1,0 +1,68 @@
+---
+title: "Creator dApp SDK"
+description: "Register your token’s website, connect a OneSwap Wallet, and give members access to experiences on your site."
+---
+
+Use the creator dApp SDK when you want someone to sign in to **your own website** with OneSwap Wallet. You can give access to holders of your token, sell a pass in that token, or propose a reward for a connected member. You define the content, prices and reward rules. OneSwap handles wallet consent and transfer approval.
+
+**Start on DevNet.** A token creator can register their site and use test assets there. Mainnet creator registration currently has limited access. Installing the SDK does not enroll a mainnet account. To try the screens first, open the [DevNet sandbox](https://devnet.oneswap.cc/dapps/sandbox). It uses sample data and does not move funds.
+
+| What you can build | When it is available |
+| --- | --- |
+| A signed-in member area | As soon as your token’s app and website are verified |
+| A holder area or membership tiers | Before and after graduation for supported tokens with verifiable, settled holdings |
+| A purchase priced in your token | After graduation and liquidity migration, when the token supports transfers |
+| Rewards funded from your treasury | After graduation and liquidity migration, when rewards are enabled for your token |
+
+## Register your website
+
+1. Sign in with the wallet that created the DevNet token. In [**My launches → dApps**](https://devnet.oneswap.cc/launchpad/launches?tab=dapps), select your token. Each token has one registered app. You can add multiple experiences inside it.
+2. Choose **Register your website**. Enter the name members should see, the exact HTTPS origin listed as your token’s official website and a return URL on that same origin. For example, use `https://members.example.com` and `https://members.example.com/callback`. Your server must handle that path.
+3. Under **Website settings**, generate the DNS TXT record, publish it and select **Check verification**. For a standard `<project>.vercel.app` origin, the dashboard also offers a file you can publish at the displayed path. The file must be public and return the displayed value without a redirect. Renew verification before the seven-day expiry shown in the dashboard.
+4. In **Server keys**, select **Create server key**. Copy the app ID and store the new secret in your backend’s secret manager, or download the backend configuration while the key is available. The secret is shown once. Keep the file out of source control, browser builds and logs.
+5. For a first holder experience, add a **Holder requirement** with ID `holder` and a minimum of one token. Under **Experiences**, create `member-area`, select the requirement and leave the price empty. Your backend checks that requirement before it serves the member area.
+
+## Install the SDK
+
+Install the package in your backend project. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
+
+```bash
+npm install @oneswap/dapp-sdk@0.1.0
+```
+
+Keep the generated lockfile. Import the server client only in backend code. Select the network explicitly and use the app ID, secret and return URL from that same network.
+
+```js
+import { createDappClient } from '@oneswap/dapp-sdk/server'
+
+export const oneswap = createDappClient({
+  network: process.env.DAPP_NETWORK, // Set to 'devnet' for this guide.
+  appId: process.env.DAPP_ID,
+  secret: process.env.DAPP_SECRET,
+  redirectUri: new URL('/callback', process.env.EXAMPLE_ORIGIN).href,
+})
+```
+
+The browser entry point, `@oneswap/dapp-sdk/browser`, opens the OneSwap wallet for sign-in or checkout. It needs the network and a wallet link or payment ID. Keep the server secret and member access tokens on your backend.
+
+## Try the included member site
+
+The package includes a working site with server-side sign-in, holder checks and a SQLite order store. Follow these steps on your verified DevNet origin.
+
+1. On your server, set `DAPP_NETWORK=devnet`, `DAPP_ID`, `DAPP_SECRET`, `EXAMPLE_ORIGIN` (the exact HTTPS origin, without a trailing slash) and `RULE_ID=holder`. Register `<EXAMPLE_ORIGIN>/callback` in the dashboard.
+2. From a writable working directory, run the command below. The site listens on `127.0.0.1:3481` by default. Forward your verified HTTPS origin to that process. Keep the SQLite file on persistent storage. Set `EXAMPLE_DATABASE` to choose its path.
+3. Open the site as a member and sign in. Review the listed requirement in OneSwap Wallet, allow the connection and return to your site. In **My launches → dApps**, select **Check connection** to confirm that your backend finished the exchange.
+4. Try a holder and a second account without the token. Both should be able to sign in. Only the consenting holder should see the protected area. For a paid test, use a different buyer wallet from the creator wallet.
+
+```bash
+node node_modules/@oneswap/dapp-sdk/example/server.mjs
+```
+
+The example keeps sessions in server memory. Use a shared server-side session store for a deployment with multiple instances. Rotate server keys before their 90-day expiry. Add the replacement, switch your backend and verify a fresh sign-in before revoking the old key. Revoking a key disconnects members authenticated with it.
+
+<CardGroup cols={2}>
+  <Card title="Sign-in and holder access" icon="key" href="/guides/dapp-holder-access">Protect the first route in your own app.</Card>
+  <Card title="Token checkout" icon="cart-shopping" href="/guides/dapp-checkout">Sell an item and verify settlement before delivery.</Card>
+  <Card title="Treasury rewards" icon="gift" href="/guides/dapp-rewards">Propose awards and show each member their receipt.</Card>
+  <Card title="Launchpad market data" icon="chart-line" href="/guides/launchpad-sdk">Read token prices, market activity and public quotes.</Card>
+</CardGroup>

@@ -1,0 +1,74 @@
+---
+title: "Token checkout"
+description: "Let members pay for one experience in your token and deliver their purchase after your backend verifies a paid receipt."
+---
+
+A buyer can purchase a pass, item or other experience using your token after it graduates, its liquidity migrates and checkout is enabled. Each purchase has **one token, one price and one creator recipient**. The buyer reviews any CC (Amulet) network fee separately in OneSwap Wallet.
+
+## Create a paid experience
+
+In **My launches → dApps → Experiences**, choose an ID such as `member-pass`, a name and a price in your token. Optionally attach a holder requirement. The OneSwap checkout uses the registered price and pays the verified creator wallet. An edit changes the terms offered to future buyers. Existing invoices keep their original terms.
+
+## Start an order
+
+On an authenticated, same-origin purchase request, use the member’s server-side session. Check `auth.me().capabilities.checkout`. Load the experience they can buy from your own catalog. Reserve a durable order ID before the first SDK call and reuse it for retries.
+
+```js
+const payment = await oneswap.payments.create(session.accessToken, {
+  experienceId: order.experienceId,
+  orderId: order.orderId,
+})
+if (payment.orderId !== order.orderId ||
+    payment.subject !== session.subject ||
+    payment.experienceId !== order.experienceId) {
+  throw new Error('Could not match checkout to this order')
+}
+await orders.bindInvoiceOnce(order.orderId, {
+  id: payment.id,
+  orderId: order.orderId,
+  subject: session.subject,
+  experienceId: order.experienceId,
+  amount: payment.amount,
+  symbol: payment.symbol,
+})
+```
+
+Here, `orders` is your own database. Bind one invoice to the order atomically and reject a conflicting binding. Store the exact decimal amount and symbol returned by the server. If you already quoted a price on your site, compare it with the invoice before opening checkout. Send the browser only the saved payment ID.
+
+```js
+import { openCheckout } from '@oneswap/dapp-sdk/browser'
+
+openCheckout(paymentId, 'devnet')
+```
+
+The buyer reviews the experience, amount, recipient and fee in their wallet and authorizes the payment. When a transfer produces an offer, the **creator as recipient** must accept it before expiry. A supported direct transfer can settle without that step. For a DevNet test, use a funded buyer account separate from the creator.
+
+## Deliver only on a matching receipt
+
+Fetch the merchant receipt from **your backend**. This call uses the app’s server credential and continues to work after the buyer’s session expires. Look up the order you saved when creating the invoice. Keep separate stores or keys for each app and network.
+
+```js
+import { isPaidReceiptFor } from '@oneswap/dapp-sdk/server'
+
+export async function reconcileOrder(oneswap, orders, orderId) {
+  const order = await orders.loadBoundInvoice(orderId)
+  if (!order) return
+  const receipt = await oneswap.payments.receipt(order.id)
+  if (!isPaidReceiptFor(receipt, order)) return
+  await orders.fulfillOnce(order.orderId)
+}
+```
+
+The helper checks the paid status and receipt ID against the saved payment ID, order ID, subject, experience ID, amount and symbol. Never accept those expected values from a browser callback. Implement `fulfillOnce` as a unique fulfillment record and entitlement in the same transaction. For an external delivery service, write a durable outbox record in that transaction and send the same fulfillment ID on retry.
+
+| Wallet or receipt state | What your site should do |
+| --- | --- |
+| `open` | Let the buyer open the original checkout. |
+| `approved` or `processing` | Show that payment is pending and recheck the same receipt. |
+| `awaiting_acceptance` | Explain that the recipient must accept the transfer offer in their wallet. |
+| `paid` | Verify the merchant receipt against the saved order and deliver once. |
+| `declined` or `expired` | Keep the order unfulfilled. If the buyer chooses to try again, record a new payment attempt against the original purchase. |
+
+A return to your site, wallet signature or polling timeout does not establish payment. For a status display you can use `payments.get(accessToken, paymentId)` or `payments.wait(accessToken, paymentId)`. On a timeout or service error, keep the current attempt and reconcile it. Never create another invoice just because the outcome is uncertain.
+
+**DevNet check.** Buy a test pass, leave the wallet before delivery, then return to your site. Run reconciliation twice. Confirm that the member receives one pass, and only after a matching paid receipt.
