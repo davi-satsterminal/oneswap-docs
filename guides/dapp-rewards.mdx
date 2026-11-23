@@ -1,0 +1,51 @@
+---
+title: "Treasury rewards"
+description: "Propose a batch for connected members, approve and fund it from the creator wallet, and track delivery for each recipient."
+---
+
+Your backend can propose awards in your registered token. **Each batch needs separate creator approval and funding.** A server key can propose a plan and read authorized receipts. It cannot sign for the creator or withdraw treasury funds.
+
+Use this flow after graduation and liquidity migration, when `auth.me().capabilities.rewards` is true. Have the creator hold enough of the transferable token and enough CC (Amulet) for the fees shown in OneSwap.
+
+## Propose awards on your server
+
+Decide which activity earns a reward in your own backend. Verify the activity, apply your budget and deduplicate the event **before** proposing awards. Use each connected member’s app-scoped `subject` as the `recipientId`. Keep the recipient and amount under server control.
+
+```js
+const batch = await oneswap.rewards.propose(event.id, [
+  { recipientId: event.memberSubject, amount: '1.25' },
+])
+await rewardEvents.saveBatchId(event.id, batch.id)
+```
+
+Here, `event` is an authorized, durable event from your application and `rewardEvents` is its store. Persist the complete award list with the event ID before the first SDK call. Use a positive decimal string per amount with up to ten fractional places. Each proposal supports **1–100 distinct, actively connected recipients** and one token. For a campaign of 250 members, save three fixed lists of 100, 100 and 50 with separate stable event IDs. Each batch will need its own review and funding.
+
+If a call times out, retry the **same event ID and awards**. A matching retry returns the existing batch. A different plan for that ID returns a conflict. Check the recorded event before making any new proposal. Limit draft creation from your site so that members cannot create a queue of unreviewed payouts.
+
+## Approve and fund the batch
+
+1. In **My launches → dApps → Reward batches**, the creator selects **Review batch**. Check every recipient, the token amounts, total and quoted CC distribution fee.
+2. Select **Approve these awards and fee**. This records approval for this exact plan.
+3. Select **Fund approved batch**. Review the token transfer and the additional wallet transfer fee, then confirm funding in OneSwap Wallet. A funding request can remain pending. Check its status before taking another action.
+
+## Show the member’s receipt
+
+Use the signed-in recipient’s access token. A member can read their own receipt for a batch. The response can change as the transfer settles.
+
+```js
+const reward = await oneswap.rewards.receipt(session.accessToken, batchId)
+const delivered = reward.status === 'delivered' && Boolean(reward.receipt?.updateId)
+```
+
+| Receipt status | What to tell the member |
+| --- | --- |
+| `pending_approval` | The creator has a draft to review. |
+| `pending` | The batch was approved. Funding or distribution is still in progress. |
+| `awaiting_acceptance` | Open your OneSwap Wallet and accept the incoming token offer before the expiry shown. |
+| `delivered` | Show the delivered amount after checking the recorded transfer receipt. |
+| `returned` | The transfer was returned. An unaccepted offer can expire. |
+| `unknown` | Delivery could not be verified. Check the same receipt again. |
+
+A wallet eligible for a direct transfer may receive it without accepting an offer. Other recipients need to accept. Show the state of each member’s receipt individually, even when other recipients in the batch are already paid.
+
+**DevNet check.** Propose a small award for a connected test member, then repeat the same proposal and confirm the batch ID is unchanged. Review and fund it as the creator. Sign in as the recipient, accept any incoming offer, and confirm that their receipt reaches `delivered` with a recorded update.

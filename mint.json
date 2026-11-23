@@ -34,6 +34,15 @@
       ]
     },
     {
+      "group": "dApps",
+      "pages": [
+        "guides/creator-dapp-sdk",
+        "guides/dapp-holder-access",
+        "guides/dapp-checkout",
+        "guides/dapp-rewards"
+      ]
+    },
+    {
       "group": "Reference",
       "pages": [
         "reference/sdk-methods",

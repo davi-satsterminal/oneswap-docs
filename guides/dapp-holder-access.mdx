@@ -1,0 +1,80 @@
+---
+title: "Sign-in and holder access"
+description: "Connect a member to your app and check fixed holder requirements without learning their wallet balance."
+---
+
+A member signs in on OneSwap Wallet, sees your verified website and its list of fixed holder requirements, and accepts or declines the connection as a whole. Your backend receives a member ID scoped to this app. The same person has different IDs in different apps.
+
+For this flow, use the hosted OneSwap authorization screen. A site using PartyLayer can use the OneSwap adapter separately for wallet discovery, account selection and supported message signing. A PartyLayer connection alone does not authorize a creator dApp to check membership or spend funds. [OneSwap PartyLayer adapter](https://www.npmjs.com/package/@oneswap/wallet-cip0103-adapter)
+
+## Connect a member
+
+Set up the backend client from the [installation guide](/guides/creator-dapp-sdk#install-the-sdk). In your sign-in POST handler, generate a new authorization request. Save its one-time state and verifier in the visiting member’s server-side session **before** redirecting to `url`.
+
+```js
+const { url, pending } = oneswap.auth.startSignIn()
+await sessions.savePending(sessionId, pending)
+```
+
+Here, `sessions` is your application’s session store. Use an unpredictable cookie with `Secure`, `HttpOnly` and `SameSite=Lax`. Require a same-origin request for the sign-in POST. Your server can redirect straight to `url`. A client-side button that receives this URL from your server can call the browser helper below.
+
+```js
+import { signIn } from '@oneswap/dapp-sdk/browser'
+
+signIn(authorizeUrlFromYourServer, 'devnet')
+```
+
+In the registered callback handler, consume the pending request once. Build the callback from your configured HTTPS origin and the actual return path and query. The following example runs inside a Node.js HTTP handler.
+
+```js
+const pending = await sessions.takePending(sessionId)
+const callbackUrl = new URL(req.url, process.env.EXAMPLE_ORIGIN)
+
+const grant = await oneswap.auth.finishSignIn(pending, callbackUrl.href)
+const member = await oneswap.auth.me(grant.access_token)
+
+await sessions.rotateAndSave(sessionId, {
+  accessToken: grant.access_token,
+  accessExpiresAt: Date.now() + grant.expires_in * 1000,
+  subject: member.subject,
+  network: member.network,
+})
+```
+
+Mount this handler only at the registered callback path. Make `takePending` atomic so two callbacks cannot reuse one request. After success, return the rotated session cookie and redirect to a clean application URL. Keep the verifier, codes and access token out of client code, logs and analytics. If the member declines, return them to your public site. Access tokens expire after ten minutes. Start sign-in again when necessary. To disconnect, call `oneswap.auth.revoke(accessToken)` and clear your local session.
+
+## Protect a route
+
+Register a fixed minimum under **My launches → dApps → Holder requirements**. For example, set the `holder` requirement to one available token. Available holdings exclude locked amounts. Total holdings include them. Incoming offers count only after settlement.
+
+This function runs on your server. Call it at the point where you serve private content or perform the protected action. Hiding a button alone leaves the route accessible.
+
+```js
+import { hasFreshHolderAccess } from '@oneswap/dapp-sdk/server'
+
+export async function canEnterHolderArea(oneswap, session) {
+  const ruleId = 'holder'
+  const gate = await oneswap.eligibility.check(session.accessToken, ruleId)
+  return hasFreshHolderAccess(gate, {
+    subject: session.subject,
+    appId: process.env.DAPP_ID,
+    network: session.network,
+    ruleId,
+  })
+}
+```
+
+| Result | What your site should do |
+| --- | --- |
+| `verified` and `yes` | Grant access when the helper confirms the member, app, rule and freshness. |
+| `verified` and `no` | Show the minimum requirement and leave the public area available. |
+| `unavailable` and `unknown` | Say that ownership could not be verified and offer a retry. |
+| `unsupported` and `unknown` | Keep the public area available. Check this token’s capabilities before offering holder access. |
+
+The app receives a decision per approved requirement. It cannot read the user’s balance or supply an arbitrary threshold. A fresh result lasts at most 30 seconds. Read again for each protected action and keep access closed on an exception or expired result. Use `auth.me().capabilities` to decide which features to show.
+
+## Change a membership tier
+
+An app can register up to eight requirements and twenty experiences for its own token. In **Holder requirements** or **Experiences**, select **Edit**. Their IDs stay the same. Changing a requirement creates a new revision. When the server returns `RULE_NOT_CONSENTED`, invite the member to reconnect and review the updated requirement. Other requirements retain their existing consent.
+
+A `401` on a member token can require a new sign-in. If the SDK reports `INVALID_CLIENT`, check your server key and website verification. On a `429`, wait for `retryAfterMs` when available and back off before retrying. Never turn an error into a successful holder check.
