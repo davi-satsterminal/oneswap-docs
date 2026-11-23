@@ -22,6 +22,12 @@ Here, `event` is an authorized, durable event from your application and `rewardE
 
 If a call times out, retry the **same event ID and awards**. A matching retry returns the existing batch. A different plan for that ID returns a conflict. Check the recorded event before making any new proposal. Limit draft creation from your site so that members cannot create a queue of unreviewed payouts.
 
+## Dismiss an unwanted draft
+
+Each app can have up to 50 outstanding drafts. In **My launches → dApps → Reward batches**, select **Dismiss draft** next to the event. Check the event and amount, then select **Confirm dismissal**. This closes the proposal before funding and frees a draft slot. Retrying the same event and awards returns the original dismissed batch.
+
+If OneSwap says approval already started, select **Review batch** to continue that approval. Check its current state before taking another action.
+
 ## Approve and fund the batch
 
 1. In **My launches → dApps → Reward batches**, the creator selects **Review batch**. Check every recipient, the token amounts, total and quoted CC distribution fee.
@@ -40,11 +46,14 @@ const delivered = reward.status === 'delivered' && Boolean(reward.receipt?.updat
 | Receipt status | What to tell the member |
 | --- | --- |
 | `pending_approval` | The creator has a draft to review. |
+| `dismissed` | The creator closed this proposal before funding. Show it as final and stop polling this batch. |
 | `pending` | The batch was approved. Funding or distribution is still in progress. |
 | `awaiting_acceptance` | Open your OneSwap Wallet and accept the incoming token offer before the expiry shown. |
 | `delivered` | Show the delivered amount after checking the recorded transfer receipt. |
 | `returned` | The transfer was returned. An unaccepted offer can expire. |
 | `unknown` | Delivery could not be verified. Check the same receipt again. |
+
+A `dismissed` receipt contains the batch ID, event ID and status. Check for both `pending_approval` and `dismissed` before reading transfer fields such as `amount` or `campaignId`.
 
 A wallet eligible for a direct transfer may receive it without accepting an offer. Other recipients need to accept. Show the state of each member’s receipt individually, even when other recipients in the batch are already paid.
 
