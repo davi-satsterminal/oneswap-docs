@@ -24,13 +24,15 @@ Use the creator dApp SDK when you want someone to sign in to **your own website*
 
 ## Install the SDK
 
-Install the package in your backend project. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
+Install the official OneSwap release archive in your backend project. It contains the exact release package for `@oneswap/dapp-sdk@0.1.0`. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
 
 ```bash
-npm install @oneswap/dapp-sdk@0.1.0
+npm install https://github.com/davi-satsterminal/oneswap-docs/releases/download/dapp-sdk-v0.1.0/oneswap-dapp-sdk-0.1.0.tgz
 ```
 
-Keep the generated lockfile. Import the server client only in backend code. Select the network explicitly and use the app ID, secret and return URL from that same network.
+Keep the generated lockfile. The archive’s SHA-256 is `449475b0ea2d68f4e4e1f941b371b464e437c1a1302e91cffd7771e94963a307`.
+
+Import the server client only in backend code. Select the network explicitly and use the app ID, secret and return URL from that same network.
 
 ```js
 import { createDappClient } from '@oneswap/dapp-sdk/server'
