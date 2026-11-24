@@ -1,9 +1,9 @@
 ---
 title: "Sign-in and holder access"
-description: "Connect a member to your app and check fixed holder requirements without learning their wallet balance."
+description: "Connect a member to your app and check fixed holder requirements and display the profile information each member chooses to share."
 ---
 
-A member signs in on OneSwap Wallet, sees your verified website and its list of fixed holder requirements, and accepts or declines the connection as a whole. Your backend receives a member ID scoped to this app. The same person has different IDs in different apps.
+A member signs in on OneSwap Wallet, sees your verified website and its list of fixed holder requirements, and can connect with both optional sharing permissions switched off. Your backend receives a member ID scoped to this app. The same person has different IDs in different apps.
 
 The SDK opens OneSwap Wallet directly for sign-in and consent. If your site already uses PartyLayer, its OneSwap adapter can discover the wallet, identify the selected account and request message signatures. Start the SDK sign-in when a member wants to use your creator app, even if they have connected through PartyLayer. This lets them approve the holder checks you listed. [OneSwap PartyLayer adapter](https://www.npmjs.com/package/@oneswap/wallet-cip0103-adapter)
 
@@ -43,6 +43,22 @@ await sessions.rotateAndSave(sessionId, {
 
 Mount this handler only at the registered callback path. Make `takePending` atomic so two callbacks cannot reuse one request. After success, return the rotated session cookie and redirect to a clean application URL. Keep the verifier, codes and access token out of client code, logs and analytics. If the member declines, return them to your public site. Access tokens expire after ten minutes. Start sign-in again when necessary. To disconnect, call `oneswap.auth.revoke(accessToken)` and clear your local session.
 
+## Display a username or balances
+
+OneSwap Wallet offers two independent choices at sign-in. Members can share their public OneSwap username, their available CC and app-token balances, either choice alone, or neither. Both start off. Members can stop sharing either permission under **Connected apps**.
+
+After sign-in, read the member’s choices from your backend. Each response belongs to the connected member and your verified app. Keep it out of shared caches and logs.
+
+```js
+const profile = await oneswap.member.sharing(session.accessToken)
+if (profile.subject !== session.subject) throw new Error('Member changed')
+const handle = profile.username ?? null
+const cc = profile.balances?.cc ?? null
+const token = profile.balances?.token ?? null
+```
+
+An omitted field means the permission was not granted. A shared but unavailable value is `null`. An actual zero is the decimal string `"0"`. Use `balances.symbol` to label the creator token and `balances.observedAt` for freshness. Render only the values the member shared. The response contains no member wallet party or other assets. Use a fresh read when displaying the header and clear previously displayed values after consent changes. Revocation stops future reads. A creator can retain information already disclosed.
+
 ## Protect a route
 
 Register a fixed minimum under **My launches → dApps → Holder requirements**. For example, set the `holder` requirement to one available token. Available holdings exclude locked amounts. Total holdings include them. Incoming offers count only after settlement.
@@ -71,7 +87,7 @@ export async function canEnterHolderArea(oneswap, session) {
 | `unavailable` and `unknown` | Say that ownership could not be verified and offer a retry. |
 | `unsupported` and `unknown` | Keep the public area available. Check this token’s capabilities before offering holder access. |
 
-The app receives a decision per approved requirement. It cannot read the user’s balance or supply an arbitrary threshold. A fresh result lasts at most 30 seconds. Read again for each protected action and keep access closed on an exception or expired result. Use `auth.me().capabilities` to decide which features to show.
+The app receives a decision per approved requirement. A holder requirement reveals only whether the member meets the fixed threshold. A fresh result lasts at most 30 seconds. Read again for each protected action and keep access closed on an exception or expired result. Use `auth.me().capabilities` to decide which features to show.
 
 ## Change a membership tier
 

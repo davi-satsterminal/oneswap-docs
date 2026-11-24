@@ -3,7 +3,7 @@ title: "Creator dApp SDK"
 description: "Register your token’s website, connect a OneSwap Wallet, and give members access to experiences on your site."
 ---
 
-Use the creator dApp SDK when you want someone to sign in to **your own website** with OneSwap Wallet. You can give access to holders of your token, sell a pass in that token, or propose a reward for a connected member. You define the content, prices and reward rules. OneSwap handles wallet consent and transfer approval.
+Use the creator dApp SDK when you want someone to sign in to **your own website** with OneSwap Wallet. You can give access to holders of your token, sell a pass for CC, your token, or both, or propose a reward for a connected member. You define the content, prices and reward rules. OneSwap handles wallet consent and transfer approval.
 
 Any token creator can register a site from **My launches → dApps** on [OneSwap](https://www.oneswap.cc/launchpad/launches?tab=dapps). Sign in with your OneSwap account to try the [dApp sandbox](https://www.oneswap.cc/dapps/sandbox). It uses sample data and works before you register a dApp. For an end-to-end integration test with your own site and test assets, use DevNet.
 
@@ -11,6 +11,9 @@ Any token creator can register a site from **My launches → dApps** on [OneSwap
 | --- | --- |
 | A signed-in member area | As soon as your token’s app and website are verified |
 | A holder area or membership tiers | Before and after graduation for supported tokens with verifiable, settled holdings |
+| An optional member header with a username or balances | When a member grants the corresponding permission at sign-in |
+| A purchase priced in CC | Before or after token graduation when CC checkout is enabled |
+| A purchase priced in both your token and CC | After token graduation and migration, when mixed checkout is enabled and your wallet can receive both assets directly |
 | A purchase priced in your token | After graduation and liquidity migration, when the token supports transfers |
 | Rewards funded from your treasury | After graduation and liquidity migration, when rewards are enabled for your token |
 
@@ -20,14 +23,14 @@ Any token creator can register a site from **My launches → dApps** on [OneSwap
 2. Choose **Register your website**. Enter the name members should see, the exact HTTPS origin listed as your token’s official website and a return URL on that same origin. For example, use `https://members.example.com` and `https://members.example.com/callback`. Your server must handle that path.
 3. Under **Website settings**, generate the DNS TXT record, publish it and select **Check verification**. For a standard `<project>.vercel.app` origin, the dashboard also offers a file you can publish at the displayed path. The file must be public and return the displayed value without a redirect. Renew verification before the seven-day expiry shown in the dashboard.
 4. In **Server keys**, select **Create server key**. Copy the app ID and store the new secret in your backend’s secret manager, or download the backend configuration while the key is available. The secret is shown once. Keep the file out of source control, browser builds and logs.
-5. For a first holder experience, add a **Holder requirement** with ID `holder` and a minimum of one token. Under **Experiences**, create `member-area`, select the requirement and leave the price empty. Your backend checks that requirement before it serves the member area.
+5. For a first holder experience, add a **Holder requirement** with ID `holder` and a minimum of one token. Under **Experiences**, create `member-area`, select the requirement and choose **Free**. Your backend checks that requirement before it serves the member area.
 
 ## Install the SDK
 
-Install version 0.2.0 from the npm registry in your backend project. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
+Install version 0.3.0 from the npm registry in your backend project. The SDK requires Node.js 20 or newer. The bundled example below uses Node.js 22.13 or newer.
 
 ```bash
-npm install @oneswap/dapp-sdk@0.2.0
+npm install @oneswap/dapp-sdk@0.3.0
 ```
 
 Import the server client only in backend code. Select the network explicitly and use the app ID, secret and return URL from that same network.
@@ -62,7 +65,7 @@ The example keeps sessions in server memory. Use a shared server-side session st
 
 <CardGroup cols={2}>
   <Card title="Sign-in and holder access" icon="key" href="/guides/dapp-holder-access">Protect the first route in your own app.</Card>
-  <Card title="Token checkout" icon="cart-shopping" href="/guides/dapp-checkout">Sell an item and verify settlement before delivery.</Card>
+  <Card title="Checkout" icon="cart-shopping" href="/guides/dapp-checkout">Sell an item and verify settlement before delivery.</Card>
   <Card title="Treasury rewards" icon="gift" href="/guides/dapp-rewards">Propose awards and show each member their receipt.</Card>
   <Card title="Launchpad market data" icon="chart-line" href="/guides/launchpad-sdk">Read token prices, market activity and public quotes.</Card>
 </CardGroup>

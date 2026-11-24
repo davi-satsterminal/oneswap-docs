@@ -1,17 +1,26 @@
 ---
-title: "Token checkout"
-description: "Let members pay for one experience in your token and deliver their purchase after your backend verifies a paid receipt."
+title: "Checkout"
+description: "Let members pay for one experience in CC, your token, or both and deliver their purchase after your backend verifies a paid receipt."
 ---
 
-A buyer can purchase a pass, item or other experience using your token after it graduates, its liquidity migrates and checkout is enabled. Each purchase has **one token, one price and one creator recipient**. The buyer reviews any CC network fee separately in OneSwap Wallet.
+Each checkout pays the verified creator wallet. The buyer sees the product price and a separate CC network fee before approving in OneSwap Wallet.
 
 ## Create a paid experience
 
-In **My launches → dApps → Experiences**, choose an ID such as `member-pass`, a name and a price in your token. Optionally attach a holder requirement. The OneSwap checkout uses the registered price and pays the verified creator wallet. An edit changes the terms offered to future buyers. Existing invoices keep their original terms.
+In **My launches → dApps → Experiences**, choose an ID, a name and a pricing option. You can attach a holder requirement to any experience.
+
+| Pricing | Availability |
+| --- | --- |
+| Free | A verified creator app |
+| CC | Before or after your token graduates when CC checkout is enabled |
+| Your token | When your graduated, migrated token supports checkout |
+| Your token + CC | When mixed checkout is enabled and your treasury receives both assets directly |
+
+For a mixed price, enter both amounts, for example **10,000 JOSE + 50 CC**. Use the receiving controls in the editor to authorize incoming assets if prompted. The buyer approves once. Both prices reach the treasury in the same ledger transaction, or neither settles. Deliver the purchased item from your backend after verifying the receipt. An edit to a price applies to new invoices. Existing invoices keep their original terms.
 
 ## Start an order
 
-On an authenticated, same-origin purchase request, use the member’s server-side session. Check `auth.me().capabilities.checkout`. Load the experience they can buy from your own catalog. Reserve a durable order ID before the first SDK call and reuse it for retries.
+On an authenticated, same-origin purchase request, use the member’s server-side session. Check the capability for your price: `ccCheckout` for CC, `checkout` for the creator token, or `mixedCheckout` for both. Load the experience they can buy from your own catalog. Reserve a durable order ID before the first SDK call and reuse it for retries.
 
 ```js
 const payment = await oneswap.payments.create(session.accessToken, {
@@ -28,12 +37,11 @@ await orders.bindInvoiceOnce(order.orderId, {
   orderId: order.orderId,
   subject: session.subject,
   experienceId: order.experienceId,
-  amount: payment.amount,
-  symbol: payment.symbol,
+  legs: payment.legs,
 })
 ```
 
-Here, `orders` is your own database. Bind one invoice to the order atomically and reject a conflicting binding. Store the exact decimal amount and symbol returned by the server. If you already quoted a price on your site, compare it with the invoice before opening checkout. Send the browser only the saved payment ID.
+Here, `orders` is your own database. Bind one invoice to the order atomically and reject a conflicting binding. Store each price leg with its kind, exact decimal amount, symbol and instrument (admin and ID). The fee is separate. If you already quoted a price on your site, compare it with the invoice before opening checkout. Send the browser only the saved payment ID.
 
 ```js
 import { openCheckout } from '@oneswap/dapp-sdk/browser'
@@ -41,7 +49,7 @@ import { openCheckout } from '@oneswap/dapp-sdk/browser'
 openCheckout(paymentId, 'devnet')
 ```
 
-The buyer reviews the experience, amount, recipient and fee in their wallet and authorizes the payment. When a transfer produces an offer, the **creator as recipient** must accept it before expiry. A supported direct transfer can settle without that step. For a DevNet test, use a funded buyer account separate from the creator.
+The buyer reviews the experience, amount, recipient and fee in their wallet and authorizes the payment. When a single-asset transfer produces an offer, the **creator as recipient** must accept it before expiry. A supported direct transfer can settle without that step. For a DevNet test, use a funded buyer account separate from the creator.
 
 ## Deliver only on a matching receipt
 
@@ -59,7 +67,7 @@ export async function reconcileOrder(oneswap, orders, orderId) {
 }
 ```
 
-The helper checks the paid status and receipt ID against the saved payment ID, order ID, subject, experience ID, amount and symbol. Never accept those expected values from a browser callback. Implement `fulfillOnce` as a unique fulfillment record and entitlement in the same transaction. For an external delivery service, write a durable outbox record in that transaction and send the same fulfillment ID on retry.
+The helper checks the paid status and receipt ID against the saved payment ID, order ID, subject, experience ID and complete list of price legs. A mixed checkout requires both exact instruments and amounts. Never accept those expected values from a browser callback. Implement `fulfillOnce` as a unique fulfillment record and entitlement in the same transaction. For an external delivery service, write a durable outbox record in that transaction and send the same fulfillment ID on retry.
 
 | Wallet or receipt state | What your site should do |
 | --- | --- |
